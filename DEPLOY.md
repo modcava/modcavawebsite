@@ -1,0 +1,379 @@
+# คู่มือ Deploy เว็บ Mocava บน Ubuntu 24.04 LTS (x64)
+
+คู่มือนี้พา deploy เว็บ (Next.js 14 + MySQL 8 + Prisma + NextAuth) ขึ้น VPS/Server จริง
+พร้อม Nginx + HTTPS (Let's Encrypt) + PM2 + ระบบ cron ยกเลิกออเดอร์ค้างชำระอัตโนมัติ
+
+> เปลี่ยน `yourdomain.com` เป็นโดเมนจริงของคุณทุกที่ และตั้งรหัสผ่านให้แข็งแรง
+
+---
+
+## 0. ภาพรวมสถาปัตยกรรมบน production
+
+```
+อินเทอร์เน็ต ──HTTPS──> Nginx (80/443) ──proxy──> Next.js (next start, :3000)  [จัดการโดย PM2]
+                                                          │
+                                                          └──> MySQL 8.0 (Docker, :3306)
+cron ทุก 15 นาที ──> POST /api/cron/cancel-unpaid-orders  (ยกเลิกออเดอร์ไม่แนบสลิป 48 ชม.)
+```
+
+ข้อเท็จจริงของโปรเจกต์:
+- **Next.js 14.2.5** — build ด้วย `npm run build`, รันด้วย `npm run start` (พอร์ต 3000)
+- **MySQL 8.0** ผ่าน Docker Compose (มี `docker-compose.yml` อยู่แล้ว)
+- ใช้ **`prisma db push`** ซิงค์ schema (โปรเจกต์นี้ยังไม่มี migration files)
+- ไฟล์สลิปการโอนถูกเก็บที่ `public/slips/` — ต้อง persist
+- ใช้ Google OAuth (ล็อกอิน) + Gmail API (ส่งอีเมล) — ต้องตั้ง redirect URI สำหรับโดเมนจริง
+
+---
+
+## 1. สิ่งที่ต้องเตรียม
+- VPS/Server **Ubuntu 24.04 LTS x64** (แนะนำ RAM ≥ 2GB; ถ้า 1GB ให้เพิ่ม swap ในขั้นตอนที่ 2.4)
+- **โดเมน** เช่น `yourdomain.com` + ตั้ง DNS **A record** ชี้มาที่ IP ของ server (รวม `www`)
+- เข้า SSH ได้ (ผู้ใช้ root หรือ sudo)
+- โค้ดโปรเจกต์ (โฟลเดอร์ `mocava`) + ไฟล์ `backups/mocava_db_clean_*.sql` (ฐานข้อมูลสะอาด: 6 หมวด + 2 admin)
+
+---
+
+## 2. เตรียม Server
+
+### 2.1 อัปเดตระบบ + timezone
+```bash
+sudo apt update && sudo apt -y upgrade
+sudo timedatectl set-timezone Asia/Bangkok
+```
+
+### 2.2 สร้างผู้ใช้ (ถ้ายังใช้ root อยู่)
+```bash
+sudo adduser deploy
+sudo usermod -aG sudo deploy
+# จากนี้ทำงานในนาม deploy:  su - deploy
+```
+
+### 2.3 ตั้งไฟร์วอลล์ (เปิดเฉพาะ SSH/HTTP/HTTPS)
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw --force enable
+sudo ufw status
+```
+> ⚠️ **ห้ามเปิดพอร์ต 3306 (MySQL) และ 3000 (Next.js) ออกสู่ภายนอก** — เข้าผ่าน Nginx เท่านั้น
+
+### 2.4 (เฉพาะ RAM 1GB) เพิ่ม swap 2GB กัน build แล้ว OOM
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+---
+
+## 3. ติดตั้ง Node.js 20 LTS
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v   # ควรเป็น v20.x
+npm -v
+```
+
+---
+
+## 4. ติดตั้ง Docker + Docker Compose (สำหรับ MySQL)
+```bash
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER     # ใช้ docker ได้โดยไม่ต้อง sudo (ต้อง logout/login ใหม่)
+```
+> ออกจาก SSH แล้วเข้าใหม่ เพื่อให้สิทธิ์ docker มีผล
+
+---
+
+## 5. อัปโหลดโค้ดขึ้น Server
+
+**ทางเลือก A — ผ่าน Git** (แนะนำ)
+```bash
+cd ~
+git clone <URL-repo-ของคุณ> mocava
+cd mocava
+```
+
+**ทางเลือก B — อัปโหลดจากเครื่องตัวเอง** (รันบนเครื่อง Windows ของคุณ)
+```powershell
+# ส่งทั้งโฟลเดอร์ mocava (ยกเว้น node_modules / .next) ขึ้น server
+scp -r "E:\ร้าน\Web Store\mocava" deploy@<SERVER_IP>:~/mocava
+```
+> ถ้าใช้ B ให้ลบ `node_modules` กับ `.next` บนเครื่องก่อนส่ง เพื่อให้เร็วและสะอาด (จะ build ใหม่บน server)
+
+---
+
+## 6. ตั้งค่า Environment (`.env`)
+
+สร้างไฟล์ `~/mocava/.env` (ดูรายการตัวแปรครบจาก `.env` เดิม):
+
+```bash
+cd ~/mocava
+nano .env
+```
+
+ใส่ค่าต่อไปนี้ (ปรับเป็นของคุณ):
+
+```dotenv
+# ── App ───────────────────────────────────────────────
+NODE_ENV=production
+NEXT_PUBLIC_APP_NAME=Modcava
+NEXT_PUBLIC_APP_URL=https://yourdomain.com
+NEXTAUTH_URL=https://yourdomain.com
+# สร้างด้วย: openssl rand -base64 32
+NEXTAUTH_SECRET=<ค่าสุ่มยาวๆ>
+
+# ── Database (MySQL ใน Docker ที่ localhost) ──────────
+DB_ENV=prod
+MYSQL_ROOT_PASSWORD=<รหัส root ที่แข็งแรง>
+MYSQL_DATABASE=mocava_db
+MYSQL_USER=mocava_user
+MYSQL_PASSWORD=<รหัส user ที่แข็งแรง>
+DATABASE_URL="mysql://mocava_user:<รหัส user>@localhost:3306/mocava_db"
+DATABASE_URL_PROD="mysql://mocava_user:<รหัส user>@localhost:3306/mocava_db"
+DATABASE_URL_TEST="mysql://mocava_user:<รหัส user>@localhost:3306/mocava_db_test"
+
+# ── Google OAuth (ล็อกอินด้วย Google) ────────────────
+GOOGLE_CLIENT_ID=<จาก Google Cloud Console>
+GOOGLE_CLIENT_SECRET=<จาก Google Cloud Console>
+
+# ── Gmail API (ส่งอีเมลในนามร้าน) ────────────────────
+GMAIL_CLIENT_ID=<...>
+GMAIL_CLIENT_SECRET=<...>
+GMAIL_SENDER_EMAIL=<อีเมลร้านที่ส่งจาก>
+
+# ── SMTP (อีเมล verify/reset password) ───────────────
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=<อีเมล>
+SMTP_PASS=<app password>
+SMTP_FROM="Modcava <no-reply@yourdomain.com>"
+
+# ── Cron (ยกเลิกออเดอร์ค้างชำระ) ─────────────────────
+# สร้างด้วย: openssl rand -hex 24
+CRON_SECRET=<ค่าสุ่ม>
+```
+
+สร้างค่าสุ่ม:
+```bash
+openssl rand -base64 32   # ใช้กับ NEXTAUTH_SECRET
+openssl rand -hex 24      # ใช้กับ CRON_SECRET
+```
+
+> 🔒 ตั้งสิทธิ์ไฟล์: `chmod 600 .env`
+
+---
+
+## 7. เริ่ม MySQL + ตั้งฐานข้อมูล
+
+### 7.1 รัน MySQL container
+```bash
+cd ~/mocava
+docker compose up -d           # อ่านค่า MYSQL_* จาก .env อัตโนมัติ
+docker compose ps              # ควรเห็น mocava_mysql เป็น healthy
+```
+
+### 7.2 ใส่ข้อมูลเริ่มต้น — เลือก 1 ทาง
+
+**ทาง A (แนะนำ): กู้คืนฐานข้อมูลสะอาด** (ได้ 6 หมวด + 2 บัญชี admin พร้อมใช้)
+อัปโหลดไฟล์ `backups/mocava_db_clean_*.sql` ขึ้น server แล้ว:
+```bash
+# สร้าง schema ก่อน (กันกรณีตารางยังไม่มี) แล้ว restore
+docker exec -i mocava_mysql sh -c \
+ '(echo "SET FOREIGN_KEY_CHECKS=0;"; cat) | mysql -u mocava_user -p"<รหัส user>" mocava_db' \
+ < ~/mocava/backups/mocava_db_clean_XXXXXXXX.sql
+```
+
+**ทาง B: เริ่มจากศูนย์** (push schema เปล่าๆ แล้วค่อยสร้าง admin/หมวดเอง)
+```bash
+npm ci
+npx prisma db push          # สร้างตารางตาม schema
+npm run db:seed             # สร้าง 6 หมวด (⚠️ seed สร้างสินค้าตัวอย่างด้วย — ลบทีหลังได้)
+```
+
+> หลัง restore: ล็อกอิน admin ด้วยบัญชีเดิม (`admin@mocava.com` / `modcava@gmail.com`)
+> ถ้าจำรหัสไม่ได้ ดูวิธีรีเซ็ตในหัวข้อ Troubleshooting
+
+---
+
+## 8. ติดตั้ง dependencies + Build
+```bash
+cd ~/mocava
+npm ci                       # ติดตั้งครบ (postinstall จะรัน prisma generate ให้)
+npx prisma db push           # ยืนยัน schema ตรงกับ DB (ถ้าใช้ทาง 7.2-A ก็รันซ้ำได้ ไม่เสียหาย)
+npm run build                # build production (.next)
+```
+
+---
+
+## 9. รันแอปด้วย PM2 (ให้รันค้างตลอด + auto-start)
+```bash
+sudo npm install -g pm2
+cd ~/mocava
+pm2 start npm --name mocava -- run start    # = next start (พอร์ต 3000)
+pm2 save
+pm2 startup systemd                          # ก๊อปคำสั่งที่มันพิมพ์ออกมาไปรัน (ตั้ง auto-start ตอน reboot)
+pm2 status
+pm2 logs mocava --lines 50                   # ดู log
+```
+ทดสอบในเครื่อง: `curl -I http://localhost:3000` ควรได้ `200`
+
+---
+
+## 10. Nginx Reverse Proxy
+```bash
+sudo apt install -y nginx
+sudo nano /etc/nginx/sites-available/mocava
+```
+ใส่:
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com www.yourdomain.com;
+
+    client_max_body_size 10M;   # รองรับอัปโหลดสลิป (จำกัด 5MB ในแอป)
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+เปิดใช้งาน:
+```bash
+sudo ln -s /etc/nginx/sites-available/mocava /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+```
+> `X-Forwarded-For` สำคัญ — แอปใช้ดู IP จริงสำหรับ rate-limit/audit log
+
+---
+
+## 11. ติดตั้ง HTTPS ฟรี (Let's Encrypt)
+> DNS ต้องชี้มาที่ server เรียบร้อยก่อน
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+# เลือก redirect HTTP → HTTPS เมื่อถาม
+sudo certbot renew --dry-run     # ทดสอบต่ออายุอัตโนมัติ (certbot ตั้ง timer ให้แล้ว)
+```
+
+---
+
+## 12. ตั้ง Cron ยกเลิกออเดอร์ค้างชำระ (48 ชม.)
+```bash
+crontab -e
+```
+เพิ่มบรรทัด (เปลี่ยน CRON_SECRET เป็นค่าใน `.env`):
+```cron
+*/15 * * * * curl -fsS -X POST -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api/cron/cancel-unpaid-orders >> /var/log/mocava-cron.log 2>&1
+```
+ทดสอบยิงเอง 1 ครั้ง:
+```bash
+curl -X POST -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api/cron/cancel-unpaid-orders
+# ควรได้ {"ok":true,"cancelled":N}
+```
+
+---
+
+## 13. ตั้งค่า Google OAuth + Gmail สำหรับโดเมนจริง
+ไปที่ **Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client**:
+
+- **Authorized JavaScript origins:** `https://yourdomain.com`
+- **Authorized redirect URIs** (เพิ่มทั้ง 2):
+  - `https://yourdomain.com/api/auth/callback/google`  ← ล็อกอินลูกค้า
+  - `https://yourdomain.com/api/admin/gmail-callback`   ← เชื่อม Gmail สำหรับส่งอีเมล
+
+จากนั้น **เข้า admin → กด Authorize Gmail ใหม่** บนโดเมนจริง (token เดิมใช้กับ localhost เท่านั้น)
+> อีเมลร้าน (ยืนยันออเดอร์/แจ้งของเข้า/แจ้งยกเลิก) จะส่งได้ต่อเมื่อ Authorize Gmail บน production แล้ว
+
+---
+
+## 14. ไฟล์อัปโหลด (สลิปการโอน) ให้ persist
+- สลิปถูกเก็บที่ `~/mocava/public/slips/` และเสิร์ฟตรงจาก `next start`
+- **ตอนอัปเดตเว็บภายหลัง อย่าลบโฟลเดอร์ `public/slips/`** (ข้อมูลลูกค้าอยู่ในนั้น)
+- รวมโฟลเดอร์นี้ไว้ในการ backup ด้วย
+```bash
+mkdir -p ~/mocava/public/slips ~/mocava/public/uploads
+```
+
+---
+
+## 15. ตั้ง Backup ฐานข้อมูลอัตโนมัติ (รายวัน)
+```bash
+mkdir -p ~/backups
+crontab -e
+```
+เพิ่ม (ดัมป์ DB ทุกวันตี 3 เก็บ 14 วันล่าสุด):
+```cron
+0 3 * * * docker exec -e MYSQL_PWD='<รหัส user>' mocava_mysql mysqldump --no-tablespaces --single-transaction -u mocava_user mocava_db | gzip > ~/backups/mocava_$(date +\%Y\%m\%d).sql.gz 2>>~/backups/backup.log; find ~/backups -name 'mocava_*.sql.gz' -mtime +14 -delete
+```
+
+---
+
+## 16. การอัปเดตเว็บภายหลัง (deploy เวอร์ชันใหม่)
+```bash
+cd ~/mocava
+git pull                 # หรืออัปโหลดไฟล์ใหม่ทับ (ยกเว้น .env, public/slips)
+npm ci
+npx prisma db push       # ถ้ามีการแก้ schema
+npm run build
+pm2 restart mocava
+pm2 logs mocava --lines 50
+```
+
+---
+
+## 17. Checklist หลัง deploy
+- [ ] `https://yourdomain.com` เปิดได้ มีกุญแจ HTTPS
+- [ ] ล็อกอิน admin ได้ → เพิ่มสินค้าได้
+- [ ] ล็อกอินด้วย Google ได้ (redirect URI ถูก)
+- [ ] สั่งซื้อ → อัปโหลดสลิปได้ → ไฟล์อยู่ใน `public/slips/`
+- [ ] ยิง cron endpoint ได้ `{"ok":true}`
+- [ ] กด Authorize Gmail แล้วทดสอบส่งอีเมล
+- [ ] `pm2 status` = online, `docker compose ps` = healthy
+- [ ] ลอง reboot server → เว็บกลับมาเองทั้ง PM2 และ MySQL
+
+---
+
+## 18. Troubleshooting
+
+**เว็บขึ้น 502 Bad Gateway**
+→ แอปไม่ได้รัน: `pm2 status`, `pm2 logs mocava` · เช็คว่า `curl http://localhost:3000` ได้ไหม
+
+**`next build` ค้าง/ถูก kill**
+→ RAM ไม่พอ — เพิ่ม swap (ขั้นตอน 2.4)
+
+**ต่อ DB ไม่ได้ (P1001)**
+→ `docker compose ps` ดู MySQL healthy ไหม · เช็ค `DATABASE_URL` ตรงกับ `MYSQL_*` ใน `.env`
+
+**ล็อกอิน Google ไม่ได้ / redirect_uri_mismatch**
+→ redirect URI ใน Google Console ต้องตรงเป๊ะกับ `https://yourdomain.com/api/auth/callback/google`
+
+**อีเมลไม่ส่ง (invalid_grant)**
+→ ต้อง Authorize Gmail ใหม่บนโดเมนจริง (หัวข้อ 13)
+
+**ลืมรหัส admin — สร้าง/รีเซ็ตผ่าน Node**
+```bash
+cd ~/mocava
+node -e "const{PrismaClient}=require('@prisma/client');const b=require('bcryptjs');const p=new PrismaClient();(async()=>{const hash=await b.hash('<รหัสใหม่>',12);await p.user.update({where:{email:'admin@mocava.com'},data:{password:hash,emailVerified:new Date()}});console.log('reset ok');await p.\$disconnect();})()"
+```
+
+---
+
+ทำตามครบแล้วเว็บจะออนไลน์พร้อมขายจริง 🚀

@@ -1,0 +1,205 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Variables ──────────────────────────────────────────── */
+:root {
+  --paper:     #faf7f2;
+  --paper-2:   #f4f0e8;
+  --paper-3:   #ede8de;
+  --ink:       #2a2218;
+  --ink-2:     #6b5e4e;
+  --ink-3:     #a8978a;
+  --ink-4:     #c9bdb4;
+  --sienna:    #b85c2a;
+  --sienna-l:  #d4784a;
+  --sienna-d:  #8a3e18;
+  --sienna-bg: rgba(184,92,42,.08);
+  --sage:      #6b8c6e;
+  --divider:   #e0d8cc;
+  --r:         6px;
+  --r-lg:      10px;
+}
+
+/* ── Reset ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; font-size: 15px; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+button { cursor: pointer; font-family: inherit; border: none; background: none; }
+input, select { font-family: inherit; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--paper-2); }
+::-webkit-scrollbar-thumb { background: var(--ink-4); border-radius: 99px; }
+
+/* ── Typography helpers ─────────────────────────────────────── */
+.serif   { font-family: 'Lora', Georgia, serif; }
+.caption { font-size: .72rem; letter-spacing: .06em; color: var(--ink-3); }
+.eyebrow {
+  font-size: .68rem; font-weight: 600; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--sienna);
+}
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 20px; border-radius: var(--r);
+  background: var(--ink); color: var(--paper);
+  font-size: .82rem; font-weight: 600; transition: all .18s;
+}
+.btn-primary:hover { background: var(--sienna); transform: translateY(-1px); }
+
+.btn-outline {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; border-radius: var(--r);
+  border: 1.5px solid var(--divider); color: var(--ink-2);
+  font-size: .82rem; font-weight: 500; transition: all .18s;
+}
+.btn-outline:hover { border-color: #3b82f6; color: #3b82f6; }
+
+/* ── Inputs ─────────────────────────────────────────────────── */
+.field {
+  width: 100%; padding: 9px 14px;
+  background: #fff; border: 1.5px solid var(--divider);
+  border-radius: var(--r); color: var(--ink); font-size: .875rem;
+  outline: none; transition: border-color .18s;
+}
+.field:focus { border-color: var(--sienna); }
+.field::placeholder { color: var(--ink-4); }
+
+/* ── Condition badges ───────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center;
+  font-size: .6rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; padding: 2px 6px; border-radius: 3px;
+}
+.badge-nm     { background: #e6f5ea; color: #2d7a42; }
+.badge-lp     { background: #e8f0fb; color: #2855a0; }
+.badge-mp     { background: #fdf4e3; color: #8a5e10; }
+.badge-hp     { background: #fde8e8; color: #a02828; }
+.badge-dmg    { background: #fce8ec; color: #952030; }
+.badge-sealed { background: var(--sienna-bg); color: var(--sienna); }
+.badge-new    { background: var(--paper-3); color: var(--ink-2); }
+
+.tag {
+  display: inline-block; font-size: .65rem; font-weight: 500;
+  padding: 1px 7px; border-radius: 3px;
+  background: var(--paper-3); color: var(--ink-3);
+  letter-spacing: .03em;
+}
+
+/* ── Admin utility classes ──────────────────────────────────── */
+/* Used only in /admin pages — light blue/white theme           */
+.card {
+  @apply bg-white border border-slate-200 rounded-lg;
+}
+.input {
+  @apply w-full px-3 py-2 bg-white border border-slate-200 rounded
+         text-slate-800 text-sm outline-none transition-colors placeholder-slate-400;
+}
+.input:focus {
+  @apply border-blue-500 ring-1 ring-blue-100;
+}
+.label {
+  @apply block text-[11px] font-semibold text-slate-500 mb-1 uppercase tracking-wide;
+}
+.btn-amber {
+  @apply inline-flex items-center gap-1.5 px-3 py-2 rounded
+         bg-[#3b82f6] text-white text-xs font-semibold transition-colors;
+}
+.btn-amber:hover:not(:disabled) {
+  @apply bg-[#2563eb];
+}
+.btn-amber:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+/* ── Admin-specific overrides ───────────────────────────────── */
+.admin-content .eyebrow {
+  color: #3b82f6;
+}
+.admin-content .btn-outline {
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+.admin-content .btn-outline:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+/* ── Lang switch ────────────────────────────────────────────── */
+[data-lang="en"] .th-text { display: none; }
+[data-lang="th"] .en-text { display: none; }
+
+/* ── Animations ─────────────────────────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-7px); }
+}
+@keyframes shadow-breathe {
+  0%, 100% { transform: translateX(-50%) scaleX(1); opacity: .7; }
+  50%       { transform: translateX(-50%) scaleX(.82); opacity: .4; }
+}
+@keyframes slideIn {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.animate-float { animation: float 4s ease-in-out infinite; }
+.animate-slide-in { animation: slideIn .26s ease; }
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .6; }
+}
+
+.foil-overlay {
+  background: linear-gradient(
+    120deg,
+    rgba(255,0,0,.35),
+    rgba(255,127,0,.35),
+    rgba(255,220,0,.35),
+    rgba(0,210,80,.35),
+    rgba(0,120,255,.35),
+    rgba(120,0,220,.35),
+    rgba(255,0,180,.35),
+    rgba(255,0,0,.35)
+  );
+  mix-blend-mode: screen;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 16px;
+}
+
+/* ── Shop responsive layout ── */
+.hero-section  { padding: 0 24px; }
+.hero-inner    { max-width: 1340px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 40px; padding: 52px 0 48px; }
+.cat-strip     { padding: 12px 24px; overflow-x: auto; }
+.cat-strip-inner { max-width: 1340px; margin: 0 auto; display: flex; gap: 7px; flex-wrap: wrap; }
+.shop-main     { max-width: 1340px; margin: 0 auto; padding: 32px 24px 72px; }
+.shop-layout   { display: flex; gap: 22px; align-items: flex-start; }
+.shop-sidebar  { width: 216px; flex-shrink: 0; }
+
+@media (max-width: 640px) {
+  .hero-section  { padding: 0 14px; }
+  .hero-inner    { grid-template-columns: 1fr; padding: 24px 0 20px; gap: 0; }
+  .hero-mascot   { display: none; }
+  .cat-strip     { padding: 8px 12px; }
+  .cat-strip-inner { flex-wrap: nowrap; }
+  .shop-main     { padding: 18px 12px 56px; }
+  .shop-layout   { flex-direction: column; gap: 14px; }
+  .shop-sidebar  { width: 100%; }
+  .product-grid  { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+}

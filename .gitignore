@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+.next/
+out/
+dist/
+build/
+
+# Environment — ห้าม commit ไม่งั้น credentials รั่ว
+.env
+.env.local
+.env.*.local
+
+# Gmail OAuth token — เก็บ refresh token ไว้ใน machine นี้เท่านั้น
+gmail-token.json
+
+# Database backups & dumps — มีข้อมูลลูกค้า + password hash ห้ามขึ้น git เด็ดขาด
+backups/
+*.sql.gz
+
+# Runtime uploads (สลิปลูกค้า) — เก็บใน server จริง ไม่ต้องขึ้น repo
+public/slips/
+public/uploads/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln

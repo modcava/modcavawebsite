@@ -1,0 +1,331 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Users ──────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  phone     String?
+  password  String?   // null สำหรับ Google OAuth users
+  role      Role     @default(CUSTOMER)
+  points    Int      @default(0)
+  resetToken       String?   @map("reset_token")
+  resetTokenExpiry DateTime? @map("reset_token_expiry")
+  savedName      String?  @map("saved_name")
+  savedPhone     String?  @map("saved_phone")
+  savedAddress   String?  @db.Text @map("saved_address")
+  savedDistrict  String?  @map("saved_district")
+  savedProvince  String?  @map("saved_province")
+  savedPostal    String?  @map("saved_postal")
+  // ── Two-factor authentication (TOTP) ──
+  // เก็บ secret เป็น base32-encoded. enabled=false จนกว่าจะ verify code ครั้งแรก
+  twoFactorSecret  String?  @map("two_factor_secret")
+  twoFactorEnabled Boolean  @default(false) @map("two_factor_enabled")
+  // ── Email verification ──
+  // null = ยังไม่ verify (block credentials login). Google OAuth ตั้งให้อัตโนมัติ
+  emailVerified           DateTime? @map("email_verified")
+  verificationToken       String?   @map("verification_token")
+  verificationTokenExpiry DateTime? @map("verification_token_expiry")
+  // ── Login lockout ──
+  // นับ failed login ต่อเนื่อง — reset เมื่อ login สำเร็จ
+  // lockedUntil > now() = ห้าม login (กัน brute-force)
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  orders    Order[]
+  addresses Address[]
+  auditLogs AuditLog[]
+  stockNotifications StockNotification[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@map("users")
+}
+
+// ── Audit log ──────────────────────────────────────────────
+// บันทึกการกระทำสำคัญของ admin เพื่อตรวจสอบย้อนหลัง
+// resourceId เป็น optional (เช่น login event ไม่มี resourceId)
+// details เป็น JSON ของ before/after — แต่เก็บเป็น Text เพื่อ portability
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  userEmail   String   @map("user_email")   // snapshot กันกรณี user ถูกลบ
+  action      String   // e.g. "product.update", "order.cancel"
+  resource    String   // e.g. "product", "order", "coupon"
+  resourceId  String?  @map("resource_id")
+  details     String?  @db.Text  // JSON-stringified before/after
+  ip          String?
+  userAgent   String?  @map("user_agent") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([resource, resourceId])
+  @@map("audit_logs")
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  label     String   @default("บ้าน")
+  name      String
+  phone     String
+  address   String   @db.Text
+  district  String?
+  province  String
+  postal    String?
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
+
+// ── Coupons ────────────────────────────────────────────────
+
+enum CouponType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_SHIPPING
+}
+
+model Coupon {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  type        CouponType
+  value       Decimal    @db.Decimal(10, 2)
+  minOrder    Decimal?   @db.Decimal(10, 2)
+  maxDiscount Decimal?   @db.Decimal(10, 2)
+  usageLimit  Int?
+  usedCount   Int        @default(0)
+  expiresAt   DateTime?
+  isActive    Boolean    @default(true) @map("is_active")
+  orders      Order[]
+  createdAt   DateTime   @default(now())
+
+  @@map("coupons")
+}
+
+// ── Categories ─────────────────────────────────────────────
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  nameTh   String?
+  slug     String    @unique
+  emoji    String?
+  products Product[]
+
+  @@map("categories")
+}
+
+// ── Products ───────────────────────────────────────────────
+
+model Product {
+  id          String      @id @default(cuid())
+  name        String
+  nameTh      String?
+  description String?     @db.Text
+  price       Decimal     @db.Decimal(10, 2)
+  cost        Decimal?    @db.Decimal(10, 2)
+  stock       Int         @default(0)
+  condition   Condition   @default(NM)
+  setName     String?     @map("set_name")
+  emoji       String?
+  imageUrl    String?     @map("image_url")
+  isNew       Boolean     @default(false) @map("is_new")
+  isActive    Boolean     @default(true)  @map("is_active")
+  categoryId  String      @map("category_id")
+  // Common extra fields
+  sku         String?
+  language    String?     @default("EN")
+  notes       String?     @db.Text
+  // MTG / TCG card fields
+  rarity      String?
+  colors      String?     @db.Text
+  formats     String?     @db.Text
+  cardType    String?     @map("card_type")
+  setCode     String?     @map("set_code")
+  collectorNumber String? @map("collector_number")
+  foil        Boolean     @default(false)
+  // MTG Sealed
+  sealedCat   String?     @map("sealed_cat")
+  productType String?     @map("product_type")
+  // Riftbound Singles
+  rbRarity    String?     @map("rb_rarity")
+  rbType      String?     @map("rb_type")
+  chapter     String?
+  domain      String?
+  altArt      Boolean     @default(false) @map("alt_art")
+  // Riftbound Sealed
+  rbSealedCat String?     @map("rb_sealed_cat")
+  // Paints
+  paintCat    String?     @map("paint_cat")
+  brand       String?
+  colorCode   String?     @map("color_code")
+  colorFamily String?     @map("color_family")
+  size        Int?
+  finish      String?
+  // Airbrush / Model Tools
+  airbrushCat    String?  @map("airbrush_cat")
+  nozzle         String?
+  feedType       String?  @map("feed_type")
+  compatibleWith String?  @map("compatible_with")
+  // Purchase limits (null = no limit)
+  maxPerOrder    Int?     @map("max_per_order")
+  maxPerCustomer Int?     @map("max_per_customer")
+  // Scheduled release — null = available now; a future datetime = "coming soon"
+  // (visible with a countdown but NOT buyable until the time passes).
+  releaseAt      DateTime? @map("release_at")
+  category    Category    @relation(fields: [categoryId], references: [id])
+  orderItems  OrderItem[]
+  stockNotifications StockNotification[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([condition])
+  @@map("products")
+}
+
+// ── Back-in-stock notifications ────────────────────────────
+// ลูกค้ากด "แจ้งเตือนเมื่อมีสินค้า" บนสินค้าที่หมด → บันทึกไว้ที่นี่
+// ส่งอีเมลแล้วลบ row เมื่อ admin เติมสต็อก (stock 0 → >0)
+model StockNotification {
+  id         String   @id @default(cuid())
+  productId  String   @map("product_id")
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String   @map("user_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email      String   // snapshot ของ email ตอนสมัคร
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([productId, userId])  // กันสมัครซ้ำ
+  @@index([productId])
+  @@map("stock_notifications")
+}
+
+enum Condition {
+  NM
+  LP
+  MP
+  HP
+  DMG
+  SEALED
+}
+
+// ── Orders ─────────────────────────────────────────────────
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique @map("invoice_number")
+  orderId       String?       @unique @map("order_id")
+  order         Order?        @relation(fields: [orderId], references: [id])
+  status        InvoiceStatus @default(DRAFT)
+  // Customer info (for standalone invoices)
+  customerName  String?       @map("customer_name")
+  customerEmail String?       @map("customer_email")
+  customerPhone String?       @map("customer_phone")
+  customerAddress String?     @db.Text @map("customer_address")
+  // Line items (JSON array)
+  lineItems     String?       @db.Text @map("line_items")
+  // Dates & finance
+  issuedAt      DateTime      @default(now()) @map("issued_at")
+  dueDate       DateTime?     @map("due_date")
+  discount      Decimal       @default(0) @db.Decimal(10,2)
+  slipUrl       String?       @map("slip_url")
+  note          String?       @db.Text
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@map("invoices")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  CANCELLED
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  orderNumber String      @unique @map("order_number")
+  userId      String      @map("user_id")
+  user        User        @relation(fields: [userId], references: [id])
+  status      OrderStatus @default(PENDING)
+  total       Decimal     @db.Decimal(10, 2)
+  items       OrderItem[]
+  // Shipping info
+  recipientName String?   @map("recipient_name")
+  address       String?   @db.Text
+  district      String?
+  province      String?
+  postalCode    String?   @map("postal_code")
+  phone         String?
+  // Shipping method
+  shippingMethod String?  @default("Kerry") @map("shipping_method")
+  trackingNumber String?  @map("tracking_number")
+  // Payment
+  paymentMethod  String?  @default("PromptPay") @map("payment_method")
+  note          String?   @db.Text
+  // Points & Coupon
+  pointsUsed    Int      @default(0) @map("points_used")
+  pointsEarned  Int      @default(0) @map("points_earned")
+  discount      Decimal  @default(0) @db.Decimal(10, 2)
+  shippingFee   Decimal  @default(0) @db.Decimal(10, 2) @map("shipping_fee")
+  couponId      String?  @map("coupon_id")
+  coupon        Coupon?  @relation(fields: [couponId], references: [id])
+  slipUrl       String?  @map("slip_url") @db.Text
+  invoice       Invoice?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([couponId])
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String  @map("order_id")
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String  @map("product_id")
+  product     Product @relation(fields: [productId], references: [id])
+  quantity    Int
+  price       Decimal @db.Decimal(10, 2)
+  productName String  @map("product_name")
+
+  @@index([orderId])
+  @@map("order_items")
+}
