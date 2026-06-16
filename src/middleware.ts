@@ -36,7 +36,10 @@ export default withAuth(
           pathname.startsWith('/forgot-password') ||
           pathname.startsWith('/reset-password') ||
           pathname.startsWith('/verify-email') ||
-          pathname.startsWith('/slips')
+          pathname.startsWith('/slips') ||
+          pathname === '/sitemap.xml' ||
+          pathname === '/robots.txt' ||
+          pathname.startsWith('/uploads/')
         ) return true
         // Protected routes — require auth
         return !!token
