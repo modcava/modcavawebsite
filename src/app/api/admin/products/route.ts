@@ -52,7 +52,7 @@ const productSchema = z.object({
   stock:       z.coerce.number().int().min(0),
   condition:   z.enum(['NM','LP','MP','HP','DMG','SEALED']),
   emoji:       optStr,
-  imageUrl:    z.union([z.string().url(), z.literal('')]).optional().transform((v) => (v === '' ? undefined : v)),
+  imageUrl:    z.union([z.string().min(1), z.literal('')]).optional().transform((v) => (v === '' ? undefined : v)),
   categoryId:  z.string().min(1),
   isNew:       z.boolean().default(false),
   isActive:    z.boolean().default(true),
