@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ProductWithCategory } from '@/types'
-import { DriveImagePicker } from './DriveImagePicker'
+import { LocalImageUploader } from './LocalImageUploader'
 import { RB_DOMAINS, MAX_DOMAINS, parseDomains, serializeDomains } from '@/lib/domains'
 
 // ── Zod schema (mirrors API) ────────────────────────────────
@@ -276,9 +276,9 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
             <Field label="Image URL" span={2}>
               <div className="flex gap-2 items-center">
                 <input {...register('imageUrl')} className="input flex-1" placeholder="https://… (optional)" />
-                <DriveImagePicker onSelect={(url) => setValue('imageUrl', url)} />
+                <LocalImageUploader onSelect={(url) => setValue('imageUrl', url)} />
               </div>
-              <Hint text="ไฟล์ใน Drive ต้องตั้งสิทธิ์ 'ทุกคนที่มีลิงก์' ถึงจะแสดงผลในร้านได้" />
+              <Hint text="JPG, PNG, WebP, GIF — ขนาดไม่เกิน 5 MB" />
             </Field>
             <Field label="Emoji">
               <input {...register('emoji')} className="input" placeholder="🃏" />
