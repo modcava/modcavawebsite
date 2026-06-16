@@ -4,7 +4,6 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
 
-const MTG_SINGLE_CATEGORY_ID = 'cmp9flcjn00006r8azfshgrx7'
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions)
@@ -75,6 +74,10 @@ export async function POST(req: NextRequest) {
   const ctx = session?.user
     ? { userId: session.user.id, userEmail: session.user.email ?? '' }
     : null
+
+  const mtgCategory = await prisma.category.findUnique({ where: { slug: 'mtg-single' } })
+  if (!mtgCategory) return NextResponse.json({ error: 'MTG Singles category not found' }, { status: 500 })
+  const MTG_SINGLE_CATEGORY_ID = mtgCategory.id
 
   const body = await req.json()
   const cards: (ScryfallCard & { importFoil?: boolean })[] = body.cards ?? []
