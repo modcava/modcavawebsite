@@ -41,6 +41,10 @@ export function ProductCard({ product, isWished, onToggleWish, onQuickView, onNo
   const price = typeof product.price === 'object' ? (product.price as { toNumber(): number }).toNumber() : Number(product.price)
   const catSlug = product.category.slug
   const badgeStyle = condBadgeStyle(product.condition)
+  // Trading cards are portrait (2:3); paints/tools/sealed photos look better in a
+  // square frame so they fill the box instead of floating in tall empty margins.
+  const isCard = catSlug === 'mtg-single' || catSlug === 'rb-single'
+  const imgAspect = isCard ? '2/3' : '1/1'
 
   function handleAdd() {
     if (isOutOfStock || comingSoon) return
@@ -83,7 +87,7 @@ export function ProductCard({ product, isWished, onToggleWish, onQuickView, onNo
       {/* Image area — click to open quick view */}
       <div
         onClick={onQuickView}
-        style={{ aspectRatio: '2/3', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: onQuickView ? 'pointer' : 'default' }}
+        style={{ aspectRatio: imgAspect, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: onQuickView ? 'pointer' : 'default' }}
       >
         <div style={{
           width: '100%', height: '100%',
