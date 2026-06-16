@@ -126,7 +126,7 @@ export default function CheckoutPage() {
   const { items, total, clearCart } = useCart()
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const [shipping, setShipping] = useState('Store Pickup')
+  const [shipping, setShipping] = useState('SPX')
   const [payment, setPayment]   = useState('PromptPay')
 
   // Saved addresses state
@@ -145,7 +145,7 @@ export default function CheckoutPage() {
   // useForm ต้องประกาศก่อน useEffect ที่ใช้ reset
   const { register, handleSubmit, reset, formState: { errors } } = useForm<Form>({
     resolver: zodResolver(schema),
-    defaultValues: { shippingMethod: 'Store Pickup', paymentMethod: 'PromptPay' },
+    defaultValues: { shippingMethod: 'SPX', paymentMethod: 'PromptPay' },
   })
 
   // Rehydrate cart from localStorage (skipHydration: true in store)
@@ -202,7 +202,7 @@ export default function CheckoutPage() {
               district:       def.district  ?? '',
               province:       def.province,
               postalCode:     def.postal    ?? '',
-              shippingMethod: 'Store Pickup',
+              shippingMethod: 'SPX',
               paymentMethod:  'PromptPay',
             })
           }
