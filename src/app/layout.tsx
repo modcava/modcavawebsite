@@ -27,10 +27,27 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://modcava.com'
+
 export const metadata: Metadata = {
-  title: { template: '%s | MOCAVA', default: 'MOCAVA — TCG & Hobby Store' },
-  description: 'Premium TCG singles, sealed products and miniature painting supplies. MTG, Riftbound, Citadel, Vallejo.',
-  keywords: ['MTG', 'Magic the Gathering', 'Riftbound', 'TCG', 'single cards', 'miniature painting'],
+  metadataBase: new URL(APP_URL),
+  title: { template: '%s | Modcava', default: 'Modcava — ร้านการ์ด MTG Riftbound และอุปกรณ์ทาสีโมเดล' },
+  description: 'ร้านขายการ์ด MTG, Riftbound, การ์ด TCG, สินค้า Sealed และอุปกรณ์ทาสีโมเดล Citadel, Vallejo ในขอนแก่น สั่งออนไลน์ได้ทั่วประเทศ',
+  keywords: [
+    'MTG', 'Magic the Gathering', 'Riftbound', 'TCG', 'การ์ด MTG', 'ซื้อการ์ด MTG',
+    'ร้านการ์ด', 'ร้านการ์ดขอนแก่น', 'สี Citadel', 'สี Vallejo', 'ทาสีโมเดล',
+    'single card', 'sealed MTG', 'อุปกรณ์ทาสี', 'โมเดล', 'Warhammer',
+  ],
+  openGraph: {
+    type: 'website',
+    url: APP_URL,
+    siteName: 'Modcava',
+    title: 'Modcava — ร้านการ์ด MTG Riftbound และอุปกรณ์ทาสีโมเดล',
+    description: 'ร้านขายการ์ด MTG, Riftbound, TCG และอุปกรณ์ทาสีโมเดล Citadel, Vallejo ในขอนแก่น',
+    images: [{ url: '/logo.png', width: 512, height: 512, alt: 'Modcava' }],
+  },
+  alternates: { canonical: APP_URL },
+  robots: { index: true, follow: true },
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -38,6 +55,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en" data-lang="en" className={`${inter.variable} ${lora.variable}`}>
+      <head>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Store',
+          name: 'Modcava',
+          url: APP_URL,
+          logo: `${APP_URL}/logo.png`,
+          description: 'ร้านขายการ์ด MTG, Riftbound, TCG และอุปกรณ์ทาสีโมเดล Citadel, Vallejo',
+          address: { '@type': 'PostalAddress', addressLocality: 'ขอนแก่น', addressCountry: 'TH' },
+          sameAs: ['https://www.facebook.com/Modcavashop'],
+        })}} />
+      </head>
       <body style={{ fontFamily: "'Inter', system-ui, sans-serif", background: 'var(--paper)', color: 'var(--ink)', minHeight: '100vh' }}>
         <ManaSymbols />
         <Providers session={session}>
