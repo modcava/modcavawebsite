@@ -88,7 +88,7 @@ export function Header({
         background: 'rgba(250,247,242,.96)', backdropFilter: 'blur(12px)',
         borderBottom: '1px solid var(--divider)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 24px', maxWidth: 1340, margin: '0 auto' }}>
+        <div className="header-inner">
 
           {/* Logo */}
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, textDecoration: 'none' }}>
@@ -112,12 +112,12 @@ export function Header({
             </div>
             <div>
               <div style={{ fontFamily: "'Lora', serif", fontSize: '1.2rem', fontWeight: 600, letterSpacing: '.05em', color: 'var(--ink)', lineHeight: 1 }}>Modcava</div>
-              <div style={{ fontSize: '.6rem', letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--sienna)', marginTop: 2 }}>TCG · Hobby</div>
+              <div className="header-brand-sub" style={{ fontSize: '.6rem', letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--sienna)', marginTop: 2 }}>TCG · Hobby</div>
             </div>
           </Link>
 
           {/* Search */}
-          <div style={{ flex: 1, maxWidth: 440, position: 'relative' }}>
+          <div className="header-search">
             {/* แว่นขยาย — คลิกได้เพื่อค้นหา */}
             <button
               onClick={commitSearch}
@@ -148,7 +148,7 @@ export function Header({
           </div>
 
           {/* Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
             {/* Lang toggle */}
             <div style={{ display: 'flex', background: 'var(--paper-3)', borderRadius: 99, padding: 2, gap: 2 }}>
               {(['en', 'th'] as const).map((l) => (

@@ -183,6 +183,10 @@ input, select { font-family: inherit; }
   gap: 16px;
 }
 
+/* ── Header responsive ── */
+.header-inner  { display: flex; align-items: center; gap: 16px; padding: 10px 24px; max-width: 1340px; margin: 0 auto; }
+.header-search { flex: 1; min-width: 0; max-width: 440px; position: relative; }
+
 /* ── Shop responsive layout ── */
 .hero-section  { padding: 0 24px; }
 .hero-inner    { max-width: 1340px; margin: 0 auto; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 40px; padding: 52px 0 48px; }
@@ -193,6 +197,10 @@ input, select { font-family: inherit; }
 .shop-sidebar  { width: 216px; flex-shrink: 0; }
 
 @media (max-width: 640px) {
+  .header-inner    { gap: 10px; padding: 8px 12px; flex-wrap: wrap; }
+  .header-search   { order: 3; flex-basis: 100%; max-width: 100%; }
+  .header-actions  { gap: 6px; }
+  .header-brand-sub { display: none; }
   .hero-section  { padding: 0 14px; }
   .hero-inner    { grid-template-columns: 1fr; padding: 24px 0 20px; gap: 0; }
   .hero-mascot   { display: none; }
