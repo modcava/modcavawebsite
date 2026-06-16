@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { Mail, Send, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react'
+import { Mail, Send, CheckCircle2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default function SendEmailPage() {
@@ -65,25 +65,19 @@ export default function SendEmailPage() {
       )}>
         {authorized === null && (
           <><div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-slate-500 animate-spin" />
-          <span>กำลังตรวจสอบการเชื่อมต่อ Gmail…</span></>
+          <span>กำลังตรวจสอบระบบอีเมล…</span></>
         )}
         {authorized === true && (
           <><CheckCircle2 size={18} className="shrink-0" />
-          <span className="font-semibold">เชื่อมต่อ Gmail แล้ว</span>
-          <span className="text-green-500">— พร้อมส่งเมลได้เลย</span></>
+          <span className="font-semibold">ระบบอีเมลพร้อมใช้งาน</span>
+          <span className="text-green-500">— ส่งเมลได้เลย</span></>
         )}
         {authorized === false && (
           <><AlertCircle size={18} className="shrink-0" />
           <div className="flex-1">
-            <span className="font-semibold">ยังไม่ได้เชื่อมต่อ Gmail</span>
-            <span className="ml-1">— ต้อง Authorize ก่อนส่งเมลได้</span>
-          </div>
-          <a
-            href="/api/admin/gmail-auth"
-            className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded transition-colors"
-          >
-            <ExternalLink size={12} /> Authorize Gmail
-          </a></>
+            <span className="font-semibold">ยังไม่ได้ตั้งค่า SMTP</span>
+            <span className="ml-1">— ตรวจสอบ SMTP_USER / SMTP_PASS ใน .env แล้ว restart แอป</span>
+          </div></>
         )}
       </div>
 
@@ -165,7 +159,7 @@ export default function SendEmailPage() {
           </button>
 
           {authorized === false && (
-            <span className="text-xs text-amber-600">กด Authorize Gmail ก่อนส่งได้</span>
+            <span className="text-xs text-amber-600">ยังส่งไม่ได้ — ตรวจสอบการตั้งค่า SMTP</span>
           )}
         </div>
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { sendEmailViaGmail, loadToken } from '@/lib/gmail'
+import { sendCustomEmail } from '@/lib/email'
 import { logAudit } from '@/lib/audit'
 
 async function requireAdmin(req: NextRequest) {
@@ -11,13 +11,13 @@ async function requireAdmin(req: NextRequest) {
   return null
 }
 
-// GET — ตรวจสอบว่า authorize แล้วหรือยัง
+// GET — ตรวจสอบว่าตั้งค่า SMTP พร้อมส่งแล้วหรือยัง
 export async function GET(req: NextRequest) {
   const guard = await requireAdmin(req)
   if (guard) return guard
 
-  const token = loadToken()
-  return NextResponse.json({ authorized: !!token?.refresh_token })
+  const authorized = !!(process.env.SMTP_USER && process.env.SMTP_PASS)
+  return NextResponse.json({ authorized })
 }
 
 // POST — ส่งเมล
@@ -47,25 +47,19 @@ export async function POST(req: NextRequest) {
   `
 
   try {
-    const result = await sendEmailViaGmail({ to, subject, html })
+    const result = await sendCustomEmail({ to, subject, html })
     if (ctx) {
       // Log recipient + subject only — never the body (may contain PII)
       await logAudit(ctx, {
         action: 'email.send',
         resource: 'email',
-        resourceId: result.id ?? null,
+        resourceId: result.messageId ?? null,
         details: { to, subject },
         req,
       })
     }
-    return NextResponse.json({ success: true, messageId: result.id })
+    return NextResponse.json({ success: true, messageId: result.messageId })
   } catch (e: unknown) {
-    if (e instanceof Error && e.message === 'NO_TOKEN') {
-      return NextResponse.json(
-        { error: 'ยังไม่ได้เชื่อมต่อ Gmail — กด Authorize ก่อน' },
-        { status: 401 },
-      )
-    }
     console.error('[send-email]', e)
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'ส่งเมลไม่สำเร็จ' },

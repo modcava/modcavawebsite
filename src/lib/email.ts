@@ -10,6 +10,13 @@ const transporter = nodemailer.createTransport({
   },
 })
 
+/** ส่งอีเมล HTML ตรงๆ ผ่าน SMTP — ใช้ร่วมกันทั้งเมลแจ้งเตือนออเดอร์และเมลที่แอดมินพิมพ์เอง */
+export async function sendCustomEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
+  const from    = process.env.SMTP_FROM ?? `"${appName}" <noreply@modcava.com>`
+  return transporter.sendMail({ from, to, subject, html })
+}
+
 export async function sendResetPasswordEmail(to: string, name: string, resetUrl: string) {
   const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
   const from    = process.env.SMTP_FROM ?? `"${appName}" <noreply@modcava.com>`
@@ -44,7 +51,6 @@ export async function sendShippedEmail(opts: {
   shippingMethod: string
   trackingNumber?: string | null
 }) {
-  const { sendEmailViaGmail } = await import('@/lib/gmail')
 
   const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
 
@@ -52,7 +58,7 @@ export async function sendShippedEmail(opts: {
     ? `<p style="color:#6b5e4e;margin:0;">เลขพัสดุ: <strong style="color:#2a2218;">${opts.trackingNumber}</strong></p>`
     : ''
 
-  await sendEmailViaGmail({
+  await sendCustomEmail({
     to:      opts.to,
     subject: `[Modcava] จัดส่งแล้ว — ออเดอร์ #${opts.orderNumber}`,
     html: `
@@ -78,10 +84,9 @@ export async function sendBackInStockEmail(opts: {
   productName: string
   productUrl: string
 }) {
-  const { sendEmailViaGmail } = await import('@/lib/gmail')
   const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
 
-  await sendEmailViaGmail({
+  await sendCustomEmail({
     to:      opts.to,
     subject: `[${appName}] สินค้ากลับมาแล้ว — ${opts.productName}`,
     html: `
@@ -105,10 +110,9 @@ export async function sendOrderCancelledEmail(opts: {
   name: string
   orderNumber: string
 }) {
-  const { sendEmailViaGmail } = await import('@/lib/gmail')
   const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
 
-  await sendEmailViaGmail({
+  await sendCustomEmail({
     to:      opts.to,
     subject: `[${appName}] ออเดอร์ #${opts.orderNumber} ถูกยกเลิก`,
     html: `
