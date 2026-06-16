@@ -126,18 +126,7 @@ export default function LoginPage() {
         {/* ── Logo ── */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <Link href="/" style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-            <div style={{
-              width: 54, height: 54,
-              borderRadius: 'var(--r-lg)',
-              background: 'var(--ink)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(42,34,24,.18)',
-            }}>
-              <svg width="26" height="26" viewBox="0 0 36 36" fill="none">
-                <path d="M18 4L30 11L30 25L18 32L6 25L6 11Z" stroke="#faf7f2" strokeWidth="1.5"/>
-                <circle cx="18" cy="18" r="3" fill="#faf7f2"/>
-              </svg>
-            </div>
+            <img src="/logo.png" alt="Modcava" style={{ width: 54, height: 54, objectFit: 'contain', borderRadius: 'var(--r-lg)' }} />
             <div>
               <div style={{ fontFamily: "'Lora', serif", fontSize: '1.5rem', fontWeight: 600, letterSpacing: '.05em', color: 'var(--ink)', lineHeight: 1 }}>
                 Modcava
