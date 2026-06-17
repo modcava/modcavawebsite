@@ -46,6 +46,12 @@ export const metadata: Metadata = {
     description: 'ร้านขายการ์ด MTG, Riftbound, TCG และอุปกรณ์ทาสีโมเดล Citadel, Vallejo ในขอนแก่น',
     images: [{ url: '/logo.png', width: 512, height: 512, alt: 'Modcava' }],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Modcava — ร้านการ์ด MTG Riftbound และอุปกรณ์ทาสีโมเดล',
+    description: 'ร้านขายการ์ด MTG, Riftbound, TCG และอุปกรณ์ทาสีโมเดล Citadel, Vallejo ในขอนแก่น',
+    images: [{ url: '/logo.png', width: 512, height: 512, alt: 'Modcava' }],
+  },
   alternates: { canonical: APP_URL },
   robots: { index: true, follow: true },
 }
@@ -54,7 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const session = await getServerSession(authOptions)
 
   return (
-    <html lang="en" data-lang="en" className={`${inter.variable} ${lora.variable}`}>
+    <html lang="th" data-lang="en" className={`${inter.variable} ${lora.variable}`}>
       <head>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
           '@context': 'https://schema.org',

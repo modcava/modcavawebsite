@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { logAudit } from '@/lib/audit'
-import { sendShippedEmail } from '@/lib/email'
+import { sendShippedEmail, sendOrderConfirmedEmail } from '@/lib/email'
 import { maybeSweepExpiredUnpaidOrders } from '@/lib/order-maintenance'
 import type { OrderStatus } from '@prisma/client'
 
@@ -111,6 +111,23 @@ export async function PATCH(req: NextRequest) {
     console.error('[admin orders PATCH] error:', err)
     const msg = err instanceof Error ? err.message : 'Unknown error'
     return NextResponse.json({ error: `อัปเดตไม่สำเร็จ: ${msg}` }, { status: 500 })
+  }
+
+  // ส่ง email แจ้งลูกค้าเมื่อเปลี่ยนสถานะเป็น CONFIRMED ครั้งแรก (ตรวจสอบการชำระเงินแล้ว)
+  if (data.status === 'CONFIRMED' && existing.status !== 'CONFIRMED' && order.user?.email) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://modcava.com'
+    sendOrderConfirmedEmail({
+      to:          order.user.email,
+      name:        order.user.name ?? '',
+      orderNumber: order.orderNumber,
+      total:       order.total.toNumber(),
+      items:       order.items.map((it) => ({
+        productName: it.productName,
+        quantity:    it.quantity,
+        price:       it.price.toNumber(),
+      })),
+      orderUrl:    `${appUrl}/orders/${order.orderNumber}/payment`,
+    }).catch((e) => console.error('[sendOrderConfirmedEmail]', e))
   }
 
   // ส่ง email แจ้งลูกค้าเมื่อเปลี่ยนสถานะเป็น SHIPPED

@@ -25,6 +25,7 @@ export default withAuth(
         // Public routes — always allow
         if (
           pathname === '/' ||
+          pathname.startsWith('/products') ||
           pathname.startsWith('/api/products') ||
           pathname.startsWith('/api/categories') ||
           pathname.startsWith('/api/coupons') ||
@@ -39,7 +40,8 @@ export default withAuth(
           pathname.startsWith('/slips') ||
           pathname === '/sitemap.xml' ||
           pathname === '/robots.txt' ||
-          pathname.startsWith('/uploads/')
+          pathname.startsWith('/uploads/') ||
+          pathname.startsWith('/icon/')
         ) return true
         // Protected routes — require auth
         return !!token
@@ -49,5 +51,5 @@ export default withAuth(
 )
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.png|slips|uploads).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.png|icon|slips|uploads).*)'],
 }

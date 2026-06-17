@@ -30,6 +30,26 @@ const CAT_EN: Record<string, string> = {
   'model-tools':'AIRBRUSH',
 }
 
+// MTG mana-color filter icons (optimized WebP in public/icon/)
+const MANA_ICON: Record<string, string> = {
+  W: '/icon/white.webp',
+  U: '/icon/blue.webp',
+  B: '/icon/black.webp',
+  R: '/icon/red.webp',
+  G: '/icon/green.webp',
+  C: '/icon/colorless.webp',
+}
+
+// Riftbound domain filter icons (transparent symbols — keys match RB_DOMAINS)
+const DOMAIN_ICON: Record<string, string> = {
+  Fury:  '/icon/Fury.webp',
+  Calm:  '/icon/Calm.webp',
+  Chaos: '/icon/Chaos.webp',
+  Order: '/icon/Order.webp',
+  Mind:  '/icon/Mind.webp',
+  Body:  '/icon/Body.webp',
+}
+
 // ── Helper: parse JSON safely ─────────────────────────────────
 function safeParse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback
@@ -885,7 +905,8 @@ export function ShopClient({ initialProducts }: Props) {
                           outlineOffset: activeColors.has(c) ? 2 : 0,
                           transition: 'transform .15s',
                         }}>
-                        <svg width="28" height="28"><use href={`#mana-${c.toLowerCase()}`} /></svg>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={MANA_ICON[c]} alt={c} width={28} height={28} style={{ width: 28, height: 28, display: 'block', borderRadius: '50%', objectFit: 'cover' }} />
                       </button>
                     ))}
                   </div>
@@ -960,9 +981,22 @@ export function ShopClient({ initialProducts }: Props) {
                   <CheckRow label="In-Stock" checked={rbInStock} onChange={setRbInStock} />
                 </FilterSection>
                 <FilterSection label="Domain">
-                  {['Fury','Calm','Chaos','Order','Mind','Body'].map((d) => (
-                    <CheckRow key={d} label={d} checked={rbDomains.includes(d)} onChange={() => toggleRbDomain(d)} />
-                  ))}
+                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {['Fury','Calm','Chaos','Order','Mind','Body'].map((d) => (
+                      <button key={d} onClick={() => toggleRbDomain(d)}
+                        title={d}
+                        style={{
+                          width: 28, height: 28, cursor: 'pointer', borderRadius: '50%', padding: 0,
+                          background: 'none', border: 'none',
+                          outline: rbDomains.includes(d) ? '2.5px solid var(--sienna)' : 'none',
+                          outlineOffset: rbDomains.includes(d) ? 2 : 0,
+                          transition: 'transform .15s',
+                        }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={DOMAIN_ICON[d]} alt={d} width={28} height={28} style={{ width: 28, height: 28, display: 'block', objectFit: 'contain' }} />
+                      </button>
+                    ))}
+                  </div>
                 </FilterSection>
                 <FilterSection label="Rarity">
                   {[

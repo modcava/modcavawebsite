@@ -452,18 +452,18 @@ export default function CheckoutPage() {
           {/* Shipping Method */}
           <div style={S.card}>
             <div style={S.sectionTitle}>🚚 วิธีจัดส่ง</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               {[
                 { id: 'Store Pickup',  label: '🏪 Store Pickup', fee: 'ฟรี' },
-                { id: 'EMS',             label: '📮 EMS',              fee: '฿50' },
-                { id: 'SPX',             label: '🚀 SPX',              fee: '฿40' },
+                { id: 'EMS',           label: '📮 EMS',          fee: '฿50' },
+                { id: 'SPX',           label: '🚀 SPX',          fee: '฿40' },
               ].map(({ id, label, fee }) => (
                 <button key={id} type="button" onClick={() => setShipping(id)} style={{
                   ...S.radioCard(shipping === id),
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '11px 14px', textAlign: 'left',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  padding: '10px 8px', textAlign: 'center', gap: 4,
                 }}>
-                  <span>{label}</span>
+                  <span style={{ fontSize: '.8rem' }}>{label}</span>
                   <span style={{ fontSize: '.72rem', opacity: .75 }}>{fee}</span>
                 </button>
               ))}

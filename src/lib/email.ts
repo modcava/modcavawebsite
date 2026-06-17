@@ -44,6 +44,54 @@ export async function sendResetPasswordEmail(to: string, name: string, resetUrl:
   })
 }
 
+export async function sendOrderConfirmedEmail(opts: {
+  to: string
+  name: string
+  orderNumber: string
+  total: number
+  items: { productName: string; quantity: number; price: number }[]
+  orderUrl?: string
+}) {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
+
+  const itemsHtml = opts.items.map((it) => `
+    <tr>
+      <td style="padding:6px 0;color:#6b5e4e;font-size:14px;">${it.productName} × ${it.quantity}</td>
+      <td style="padding:6px 0;text-align:right;color:#2a2218;font-size:14px;white-space:nowrap;">฿${(it.price * it.quantity).toLocaleString()}</td>
+    </tr>`).join('')
+
+  const orderButton = opts.orderUrl
+    ? `<a href="${opts.orderUrl}" style="display:inline-block;padding:12px 28px;background:#8b5a2b;color:#fff;border-radius:8px;font-weight:700;text-decoration:none;font-size:15px;margin-top:4px;">ดูรายละเอียดออเดอร์</a>`
+    : ''
+
+  await sendCustomEmail({
+    to:      opts.to,
+    subject: `[${appName}] ยืนยันออเดอร์แล้ว — #${opts.orderNumber}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
+        <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">✅ ยืนยันออเดอร์เรียบร้อยแล้ว!</h2>
+        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${opts.name || 'คุณ'},<br/>เราได้รับและตรวจสอบการชำระเงินของคุณเรียบร้อยแล้ว ออเดอร์กำลังเตรียมจัดส่ง — เราจะแจ้งเลขพัสดุให้ทราบอีกครั้งเมื่อจัดส่งแล้ว</p>
+        <div style="background:#fff;border:1px solid #e5ddd4;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+          <p style="color:#6b5e4e;margin:0 0 10px;">หมายเลขออเดอร์: <strong style="color:#2a2218;">#${opts.orderNumber}</strong></p>
+          <table style="width:100%;border-collapse:collapse;border-top:1px solid #e5ddd4;">
+            ${itemsHtml}
+          </table>
+          <table style="width:100%;border-collapse:collapse;border-top:1px solid #e5ddd4;margin-top:8px;">
+            <tr>
+              <td style="padding:10px 0 0;color:#2a2218;font-weight:700;">ยอดรวม</td>
+              <td style="padding:10px 0 0;text-align:right;color:#8b5a2b;font-weight:700;font-size:16px;white-space:nowrap;">฿${opts.total.toLocaleString()}</td>
+            </tr>
+          </table>
+        </div>
+        ${orderButton}
+        <p style="color:#a08060;font-size:13px;margin-top:20px;">หากมีคำถามหรือปัญหาใดๆ สามารถติดต่อเราได้ที่ Line OA หรือ Facebook: Modcavashop</p>
+        <hr style="border:none;border-top:1px solid #e5ddd4;margin:24px 0;"/>
+        <p style="color:#c4b49a;font-size:11px;">© ${new Date().getFullYear()} ${appName} · 337/1 ถ.รื่นรมย์ อ.เมือง จ.ขอนแก่น 40000</p>
+      </div>
+    `,
+  })
+}
+
 export async function sendShippedEmail(opts: {
   to: string
   name: string

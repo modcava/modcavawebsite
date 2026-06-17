@@ -58,12 +58,19 @@ sudo ufw status
 ```
 > ⚠️ **ห้ามเปิดพอร์ต 3306 (MySQL) และ 3000 (Next.js) ออกสู่ภายนอก** — เข้าผ่าน Nginx เท่านั้น
 
-### 2.4 (เฉพาะ RAM 1GB) เพิ่ม swap 2GB กัน build แล้ว OOM
+### 2.4 (RAM ≤ 2GB) เพิ่ม swap 4GB กัน build แล้ว OOM — **จำเป็น**
+> ⚠️ พิสูจน์แล้วว่า RAM 2GB (เช่น VPS 1.9GB) ที่ **ไม่มี swap จะ build ไม่ผ่าน** — Next.js
+> peak ทะลุ RAM ตอนช่วง "Linting and checking validity of types" แล้วโดน OOM kill
+> (อาการ: `Killed` เฉยๆ หรือ `FATAL ERROR: Reached heap limit Allocation failed`)
+> RAM 1GB ก็ใช้คำสั่งชุดนี้ได้เช่นกัน
+
 ```bash
-sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h    # ต้องเห็น Swap: 4.0Gi
 ```
+> ถ้าเคยสร้าง swapfile 2GB ไว้แล้วต้องการขยายเป็น 4GB: `sudo swapoff /swapfile` ก่อน แล้วรันชุดข้างบนซ้ำ (บรรทัด `/etc/fstab` ไม่ต้องเพิ่มซ้ำ)
 
 ---
 
@@ -97,7 +104,7 @@ sudo usermod -aG docker $USER     # ใช้ docker ได้โดยไม่
 **ทางเลือก A — ผ่าน Git** (แนะนำ)
 ```bash
 cd ~
-git clone <URL-repo-ของคุณ> mocava
+git clone https://github.com/modcava/modcavawebsite.git mocava
 cd mocava
 ```
 
@@ -184,12 +191,16 @@ docker compose ps              # ควรเห็น mocava_mysql เป็น
 ### 7.2 ใส่ข้อมูลเริ่มต้น — เลือก 1 ทาง
 
 **ทาง A (แนะนำ): กู้คืนฐานข้อมูลสะอาด** (ได้ 6 หมวด + 2 บัญชี admin พร้อมใช้)
-อัปโหลดไฟล์ `backups/mocava_db_clean_*.sql` ขึ้น server แล้ว:
+อัปโหลดไฟล์ `backups/mocava_db_clean_*.sql` ขึ้น server แล้ว (ต้อง `docker compose up -d` ให้ DB `mocava_db` ถูกสร้างก่อน):
 ```bash
-# สร้าง schema ก่อน (กันกรณีตารางยังไม่มี) แล้ว restore
-docker exec -i mocava_mysql sh -c \
- '(echo "SET FOREIGN_KEY_CHECKS=0;"; cat) | mysql -u mocava_user -p"<รหัส user>" mocava_db' \
- < ~/mocava/backups/mocava_db_clean_XXXXXXXX.sql
+# ดูชื่อไฟล์ dump ที่อัปโหลดมา
+ls ~/mocava/backups/
+
+# กู้คืน — ไฟล์ dump มีทั้ง CREATE TABLE + ข้อมูล อยู่ในไฟล์เดียว (สร้างตาราง+ใส่ข้อมูลทีเดียว)
+# เปลี่ยนชื่อไฟล์ตามที่ ls เจอ และใส่รหัส mocava_user (= MYSQL_PASSWORD ใน .env)
+{ echo "SET FOREIGN_KEY_CHECKS=0;"; cat ~/mocava/backups/mocava_db_clean_XXXXXXXX.sql; } \
+  | docker exec -i -e MYSQL_PWD='<รหัสผ่าน_mocava_user>' mocava_mysql \
+    mysql -u mocava_user mocava_db
 ```
 
 **ทาง B: เริ่มจากศูนย์** (push schema เปล่าๆ แล้วค่อยสร้าง admin/หมวดเอง)
@@ -209,8 +220,17 @@ npm run db:seed             # สร้าง 6 หมวด (⚠️ seed สร
 cd ~/mocava
 npm ci                       # ติดตั้งครบ (postinstall จะรัน prisma generate ให้)
 npx prisma db push           # ยืนยัน schema ตรงกับ DB (ถ้าใช้ทาง 7.2-A ก็รันซ้ำได้ ไม่เสียหาย)
-npm run build                # build production (.next)
+
+# build production (.next) — บน RAM ≤ 2GB ต้องตั้ง NODE_OPTIONS ยกเพดาน heap
+# ให้ V8 spill ลง swap ได้ (ต้องทำขั้นตอน 2.4 เพิ่ม swap 4GB ก่อน) ไม่งั้น OOM
+NODE_OPTIONS="--max-old-space-size=3072" npm run build
 ```
+> **อย่าตั้ง `--max-old-space-size` ต่ำกว่า RAM ที่มี** (เช่น 1536) — นั่นคือการตั้ง *เพดาน* heap
+> ของ V8 พอ type-check ใช้เกินจะ kill ตัวเองทันที และ swap ช่วยไม่ได้เลย ต้องตั้งให้ **สูงกว่า**
+> RAM จริงเพื่อบังคับให้ไหลลง swap (3072 = 3GB เหมาะกับ swap 4GB)
+>
+> build สำเร็จเมื่อเห็น `✓ Compiled successfully` + ตาราง route — ช่วง type-check จะช้า
+> (ใช้ swap) รอ 5-10 นาทีบนเครื่อง RAM 2GB ถือว่าปกติ อย่ากด Ctrl+C ระหว่างทาง
 
 ---
 
@@ -233,13 +253,28 @@ pm2 logs mocava --lines 50                   # ดู log
 sudo apt install -y nginx
 sudo nano /etc/nginx/sites-available/mocava
 ```
-ใส่:
+ใส่ (เปลี่ยน `/home/ubuntu` เป็น home ของ user จริง):
 ```nginx
 server {
     listen 80;
     server_name yourdomain.com www.yourdomain.com;
 
-    client_max_body_size 10M;   # รองรับอัปโหลดสลิป (จำกัด 5MB ในแอป)
+    client_max_body_size 10M;   # รองรับอัปโหลดสลิป/รูปสินค้า (จำกัด 10MB ในแอป)
+
+    # ── เสิร์ฟไฟล์อัปโหลดตรงจากดิสก์ (อย่าผ่าน Next.js!) ──────────────
+    # ⚠️ จำเป็น: `next start` เสิร์ฟเฉพาะไฟล์ใน public/ ที่มี "ตอน build" เท่านั้น
+    # รูปสินค้า (public/uploads/) + สลิป (public/slips/) ถูกเขียน "หลัง build"
+    # ถ้าไม่มี 2 block นี้ → รูปขึ้น 404 / รูปแตก ทั้งเว็บ
+    location /uploads/ {
+        root /home/ubuntu/mocava/public;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000";
+    }
+    location /slips/ {
+        root /home/ubuntu/mocava/public;
+        access_log off;
+    }
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -254,6 +289,8 @@ server {
     }
 }
 ```
+> ใช้ `root .../public` (ไม่ใช่ `alias`) — request `/uploads/x.webp` จะชี้ไป `.../public/uploads/x.webp` พอดี และเลี่ยงบั๊ก `try_files`+`alias`
+
 เปิดใช้งาน:
 ```bash
 sudo ln -s /etc/nginx/sites-available/mocava /etc/nginx/sites-enabled/
@@ -261,6 +298,9 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 ```
 > `X-Forwarded-For` สำคัญ — แอปใช้ดู IP จริงสำหรับ rate-limit/audit log
+>
+> ⚠️ **อย่าเซฟไฟล์ backup (.bak) ไว้ใน `/etc/nginx/sites-enabled/`** — nginx โหลด *ทุกไฟล์*
+> ในโฟลเดอร์นี้ไม่สนนามสกุล จะได้ warning `conflicting server name` เก็บ backup ไว้ที่อื่น เช่น home dir
 
 ---
 
@@ -304,10 +344,12 @@ curl -X POST -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api
 
 ---
 
-## 14. ไฟล์อัปโหลด (สลิปการโอน) ให้ persist
-- สลิปถูกเก็บที่ `~/mocava/public/slips/` และเสิร์ฟตรงจาก `next start`
-- **ตอนอัปเดตเว็บภายหลัง อย่าลบโฟลเดอร์ `public/slips/`** (ข้อมูลลูกค้าอยู่ในนั้น)
-- รวมโฟลเดอร์นี้ไว้ในการ backup ด้วย
+## 14. ไฟล์อัปโหลด (สลิปการโอน + รูปสินค้า) ให้ persist
+- สลิปเก็บที่ `~/mocava/public/slips/` · รูปสินค้าเก็บที่ `~/mocava/public/uploads/`
+- ทั้งคู่ **เสิร์ฟผ่าน Nginx โดยตรง** (ดูข้อ 10) — ไม่ใช่ผ่าน `next start` เพราะ Next เสิร์ฟ
+  เฉพาะไฟล์ใน `public/` ที่มี "ตอน build" ไฟล์ที่อัปหลัง build จะ 404 ถ้าไม่มี Nginx block
+- **ตอนอัปเดตเว็บภายหลัง อย่าลบ 2 โฟลเดอร์นี้** (ข้อมูลลูกค้า + รูปสินค้าอยู่ในนั้น)
+- รวม 2 โฟลเดอร์นี้ไว้ในการ backup ด้วย
 ```bash
 mkdir -p ~/mocava/public/slips ~/mocava/public/uploads
 ```
@@ -327,15 +369,31 @@ crontab -e
 ---
 
 ## 16. การอัปเดตเว็บภายหลัง (deploy เวอร์ชันใหม่)
+
+**วิธีที่แนะนำ — ใช้สคริปต์ `deploy.sh`** (อยู่ใน repo แล้ว):
+```bash
+~/mocava/deploy.sh
+```
+สคริปต์จัดการให้ครบในคำสั่งเดียว: `git pull` → `npm ci`/`prisma db push` **เฉพาะเมื่อ
+`package-lock.json`/`schema.prisma` เปลี่ยน** (ข้ามถ้าไม่เปลี่ยน ทำให้เร็วขึ้นมาก) → build
+ด้วย heap 3GB → `pm2 restart` และ **`set -e` หยุดทันทีถ้า build ล้ม จึงไม่ restart ทับจน 502**
+
+> ครั้งแรกต้องตั้งสิทธิ์รันก่อน: `chmod +x ~/mocava/deploy.sh`
+> ถ้าเจอ `bad interpreter ...^M` (Windows line-ending) แก้: `sed -i 's/\r$//' ~/mocava/deploy.sh`
+
+**วิธีแมนนวล** (เผื่ออัปโหลดไฟล์เองด้วย scp แทน git, หรือ debug ทีละขั้น):
 ```bash
 cd ~/mocava
-git pull                 # หรืออัปโหลดไฟล์ใหม่ทับ (ยกเว้น .env, public/slips)
-npm ci
-npx prisma db push       # ถ้ามีการแก้ schema
-npm run build
+git pull                 # หรืออัปโหลดไฟล์ใหม่ทับ (ยกเว้น .env, public/slips, public/uploads)
+npm ci                   # เฉพาะเมื่อ dependencies เปลี่ยน
+npx prisma db push       # เฉพาะเมื่อแก้ schema
+NODE_OPTIONS="--max-old-space-size=3072" npm run build   # RAM ≤ 2GB ต้องตั้ง heap (ดูข้อ 8)
 pm2 restart mocava
 pm2 logs mocava --lines 50
 ```
+> ⚠️ **อย่ารัน `pm2 restart mocava` ถ้า `npm run build` ยังไม่สำเร็จ** — ถ้า build พังกลางคัน
+> `.next` จะไม่สมบูรณ์ (ไม่มี `.next/BUILD_ID`) ทำให้ `next start` ตาย → **502 Bad Gateway**
+> เช็คก่อน restart เสมอ: `ls .next/BUILD_ID` ต้องมีไฟล์
 
 ---
 
@@ -344,6 +402,7 @@ pm2 logs mocava --lines 50
 - [ ] ล็อกอิน admin ได้ → เพิ่มสินค้าได้
 - [ ] ล็อกอินด้วย Google ได้ (redirect URI ถูก)
 - [ ] สั่งซื้อ → อัปโหลดสลิปได้ → ไฟล์อยู่ใน `public/slips/`
+- [ ] เพิ่มสินค้า + อัปโหลดรูป → **รูปขึ้นจริงในหน้าเว็บ** (`curl -sI https://yourdomain.com/uploads/<ไฟล์> ` ได้ 200)
 - [ ] ยิง cron endpoint ได้ `{"ok":true}`
 - [ ] กด Authorize Gmail แล้วทดสอบส่งอีเมล
 - [ ] `pm2 status` = online, `docker compose ps` = healthy
@@ -353,11 +412,29 @@ pm2 logs mocava --lines 50
 
 ## 18. Troubleshooting
 
-**เว็บขึ้น 502 Bad Gateway**
-→ แอปไม่ได้รัน: `pm2 status`, `pm2 logs mocava` · เช็คว่า `curl http://localhost:3000` ได้ไหม
+**เว็บขึ้น 502 Bad Gateway** = Nginx รันอยู่แต่ Next.js (port 3000) ไม่ตอบ ไล่เช็คตามนี้:
+1. `pm2 status` — ถ้า**ว่างเปล่า/ไม่มี process `mocava`** แปลว่าแอปไม่ได้รัน (เช่น หลัง reboot
+   แต่ไม่ได้ตั้ง auto-start, หรือ `pm2 restart` ไปทั้งที่ไม่มี process อยู่) → `pm2 start npm --name mocava -- run start`
+   แล้ว **อย่าลืม `pm2 save && pm2 startup systemd`** (ข้อ 9) กันหายอีก
+2. ถ้า status เป็น `errored`/`stopped` → `pm2 logs mocava --lines 50 --nostream` ดู error จริง
+3. เช็ค `.next` สมบูรณ์ไหม: `ls .next/BUILD_ID` — **ถ้าไม่มีไฟล์นี้ = build ไม่เคยสำเร็จ**
+   (มักเพราะ OOM ดูหัวข้อถัดไป) ต้อง build ใหม่ให้ผ่านก่อนถึงจะ `next start` ได้
+4. ทดสอบในเครื่อง: `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000` ควรได้ `200`
 
-**`next build` ค้าง/ถูก kill**
-→ RAM ไม่พอ — เพิ่ม swap (ขั้นตอน 2.4)
+**`next build` ค้าง/ถูก kill / `FATAL ERROR: Reached heap limit`** = RAM ไม่พอ (OOM)
+→ มักเกิดบน RAM ≤ 2GB ช่วง "checking validity of types" แก้ 2 อย่างคู่กัน:
+1. เพิ่ม swap 4GB (ข้อ 2.4)
+2. build ด้วย `NODE_OPTIONS="--max-old-space-size=3072" npm run build` (ข้อ 8)
+   — ตั้งให้สูงกว่า RAM จริงเพื่อให้ heap ไหลลง swap, **ห้ามตั้งต่ำ** (เช่น 1536) เพราะจะชนเพดานแล้ว kill เอง
+
+**รูปสินค้า/สลิปไม่ขึ้น (รูปแตก / 404)** = ไฟล์ถูกเซฟแล้วแต่เสิร์ฟออกไม่ได้
+1. เช็คไฟล์มีจริงในดิสก์: `ls -la ~/mocava/public/uploads/` — ถ้ามีไฟล์ = อัปโหลด/sharp ปกติ
+2. เช็คเสิร์ฟได้ไหม: `curl -sI https://yourdomain.com/uploads/<ชื่อไฟล์> | head -1`
+   - ได้ **404** = Nginx ยังไม่มี block `/uploads/` `/slips/` → เพิ่มตามข้อ 10 แล้ว `sudo nginx -t && sudo systemctl reload nginx`
+     (สาเหตุ: `next start` ไม่เสิร์ฟไฟล์ที่อัปหลัง build ต้องให้ Nginx เสิร์ฟตรงจากดิสก์)
+   - ได้ **200** = ไฟล์เสิร์ฟได้ ปัญหาอยู่ที่ค่า `imageUrl` ใน DB ชี้ผิด (เช่น รูปอัปบนเครื่อง dev แล้ว restore DB มา — ไฟล์ไม่ตามมา) → อัปโหลดรูปใหม่บนเว็บจริง
+3. โฟลเดอร์ `uploads/` **ว่างเปล่า** = อัปโหลดล้มเหลว → `pm2 logs mocava` ดู error ตอนอัป
+   (มักเป็น `sharp` คนละ platform จากการก๊อป `node_modules` ข้ามเครื่อง — แก้ด้วย `npm ci` บน server)
 
 **ต่อ DB ไม่ได้ (P1001)**
 → `docker compose ps` ดู MySQL healthy ไหม · เช็ค `DATABASE_URL` ตรงกับ `MYSQL_*` ใน `.env`
