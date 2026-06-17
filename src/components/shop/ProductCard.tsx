@@ -101,6 +101,8 @@ export function ProductCard({ product, isWished, onToggleWish, onQuickView, onNo
               <img
                 src={product.imageUrl}
                 alt={product.name}
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: '100%', height: '100%', objectFit: 'contain',
                   ...(product.foil ? {

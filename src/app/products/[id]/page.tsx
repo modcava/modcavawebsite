@@ -9,7 +9,9 @@ import { ProductActions } from '@/components/shop/ProductActions'
 import { isComingSoon, formatReleaseDate } from '@/lib/release'
 import { formatDomains } from '@/lib/domains'
 
-export const dynamic = 'force-dynamic'
+// ISR: แคชหน้าไว้ 60 วิ (เร็วขึ้น + ลดภาระ DB) — สต็อก/ราคาอาจช้าได้สูงสุด 60 วิ
+// แต่ตอนหยิบลงตะกร้า/เช็คเอาต์มีการตรวจสต็อกจริงอีกชั้น
+export const revalidate = 60
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://modcava.com'
 
