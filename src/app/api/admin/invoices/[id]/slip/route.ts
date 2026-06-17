@@ -4,6 +4,7 @@ import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
+import { SLIPS_DIR, slipUrlFor } from '@/lib/slips'
 
 async function requireAdmin(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -33,11 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase()
   const filename = `inv-${invoice.invoiceNumber}-${Date.now()}.${ext}`
-  const slipsDir = path.join(process.cwd(), 'public', 'slips')
-  await mkdir(slipsDir, { recursive: true })
-  await writeFile(path.join(slipsDir, filename), Buffer.from(await file.arrayBuffer()))
+  await mkdir(SLIPS_DIR, { recursive: true })
+  await writeFile(path.join(SLIPS_DIR, filename), Buffer.from(await file.arrayBuffer()))
 
-  const slipUrl = `/slips/${filename}`
+  const slipUrl = slipUrlFor(filename)
   await prisma.invoice.update({ where: { id: params.id }, data: { slipUrl } })
 
   return NextResponse.json({ slipUrl })

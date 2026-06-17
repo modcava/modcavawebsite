@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
+import { SLIPS_DIR, slipUrlFor } from '@/lib/slips'
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
@@ -42,12 +43,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'นามสกุลไฟล์ไม่รองรับ' }, { status: 400 })
   }
   const filename = `${orderNumber}-${Date.now()}.${ext}`
-  const slipsDir = path.join(process.cwd(), 'public', 'slips')
-  await mkdir(slipsDir, { recursive: true })
+  await mkdir(SLIPS_DIR, { recursive: true })
   const buffer = Buffer.from(await file.arrayBuffer())
-  await writeFile(path.join(slipsDir, filename), buffer)
+  await writeFile(path.join(SLIPS_DIR, filename), buffer)
 
-  const slipUrl = `/slips/${filename}`
+  // เก็บ URL แบบป้องกันสิทธิ์ (เสิร์ฟผ่าน /api/slips/ — ไม่ใช่ static /slips/)
+  const slipUrl = slipUrlFor(filename)
 
   // อัปเดต order
   await prisma.order.update({

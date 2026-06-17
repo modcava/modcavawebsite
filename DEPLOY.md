@@ -261,19 +261,19 @@ server {
 
     client_max_body_size 10M;   # รองรับอัปโหลดสลิป/รูปสินค้า (จำกัด 10MB ในแอป)
 
-    # ── เสิร์ฟไฟล์อัปโหลดตรงจากดิสก์ (อย่าผ่าน Next.js!) ──────────────
+    # ── รูปสินค้า: เสิร์ฟตรงจากดิสก์ (สาธารณะได้) ────────────────────
     # ⚠️ จำเป็น: `next start` เสิร์ฟเฉพาะไฟล์ใน public/ ที่มี "ตอน build" เท่านั้น
-    # รูปสินค้า (public/uploads/) + สลิป (public/slips/) ถูกเขียน "หลัง build"
-    # ถ้าไม่มี 2 block นี้ → รูปขึ้น 404 / รูปแตก ทั้งเว็บ
+    # รูปสินค้า (public/uploads/) ถูกเขียน "หลัง build" — ถ้าไม่มี block นี้รูปจะ 404
     location /uploads/ {
         root /home/ubuntu/mocava/public;
         access_log off;
         expires 30d;
         add_header Cache-Control "public, max-age=2592000";
     }
+    # ── สลิปการโอน: ห้ามเข้าถึงตรงๆ (ข้อมูลการเงินลูกค้า / PDPA) ──────
+    # เข้าผ่าน /api/slips/<file> ที่เช็คสิทธิ์เท่านั้น — บล็อก path เดิม /slips/
     location /slips/ {
-        root /home/ubuntu/mocava/public;
-        access_log off;
+        return 403;
     }
 
     location / {
@@ -346,8 +346,9 @@ curl -X POST -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api
 
 ## 14. ไฟล์อัปโหลด (สลิปการโอน + รูปสินค้า) ให้ persist
 - สลิปเก็บที่ `~/mocava/public/slips/` · รูปสินค้าเก็บที่ `~/mocava/public/uploads/`
-- ทั้งคู่ **เสิร์ฟผ่าน Nginx โดยตรง** (ดูข้อ 10) — ไม่ใช่ผ่าน `next start` เพราะ Next เสิร์ฟ
-  เฉพาะไฟล์ใน `public/` ที่มี "ตอน build" ไฟล์ที่อัปหลัง build จะ 404 ถ้าไม่มี Nginx block
+- **รูปสินค้า** เสิร์ฟผ่าน Nginx โดยตรง (สาธารณะได้) — ดูข้อ 10
+- **สลิปการโอน** ⚠️ เป็นข้อมูลการเงินลูกค้า เสิร์ฟผ่าน route `/api/slips/<file>` ที่เช็คสิทธิ์
+  (เจ้าของออเดอร์/แอดมินเท่านั้น) — path เดิม `/slips/` ถูก Nginx บล็อก `return 403` (ดูข้อ 10)
 - **ตอนอัปเดตเว็บภายหลัง อย่าลบ 2 โฟลเดอร์นี้** (ข้อมูลลูกค้า + รูปสินค้าอยู่ในนั้น)
 - รวม 2 โฟลเดอร์นี้ไว้ในการ backup ด้วย
 ```bash
@@ -357,11 +358,24 @@ mkdir -p ~/mocava/public/slips ~/mocava/public/uploads
 ---
 
 ## 15. ตั้ง Backup ฐานข้อมูลอัตโนมัติ (รายวัน)
+
+**วิธีที่แนะนำ — ใช้สคริปต์ `backup.sh`** (อยู่ใน repo, อ่านรหัส DB จาก `.env` เอง ไม่ต้องฮาร์ดโค้ด):
 ```bash
-mkdir -p ~/backups
+chmod +x ~/mocava/backup.sh
+~/mocava/backup.sh            # ทดสอบรันครั้งแรก — ควรได้ ✅ backup: ... .sql.gz
+```
+ตั้ง cron รายวันตี 3:
+```bash
 crontab -e
 ```
-เพิ่ม (ดัมป์ DB ทุกวันตี 3 เก็บ 14 วันล่าสุด):
+เพิ่มบรรทัด:
+```cron
+0 3 * * * /home/ubuntu/mocava/backup.sh >> /home/ubuntu/backups/backup.log 2>&1
+```
+> สคริปต์เก็บไฟล์ใน `~/backups/` ลบอัตโนมัติเมื่อเกิน 14 วัน และจะ **ออก error ถ้า backup ว่างเปล่า**
+> (รหัสผิด/DB ไม่ขึ้น) จะได้รู้ว่าล้มเหลว · กู้คืน: `gunzip < ~/backups/mocava_XXX.sql.gz | docker exec -i -e MYSQL_PWD='<รหัส>' mocava_mysql mysql -u mocava_user mocava_db`
+
+**วิธีแมนนวล** (ดัมป์ทีเดียว ไม่ใช้สคริปต์):
 ```cron
 0 3 * * * docker exec -e MYSQL_PWD='<รหัส user>' mocava_mysql mysqldump --no-tablespaces --single-transaction -u mocava_user mocava_db | gzip > ~/backups/mocava_$(date +\%Y\%m\%d).sql.gz 2>>~/backups/backup.log; find ~/backups -name 'mocava_*.sql.gz' -mtime +14 -delete
 ```
