@@ -25,6 +25,7 @@ const schema = z.object({
   categoryId:  z.string().min(1, 'Required'),
   isNew:       z.boolean().default(false),
   isActive:    z.boolean().default(true),
+  isPreorder:  z.boolean().default(false),
   // Common extras
   sku:         z.string().optional(),
   language:    z.string().optional(),
@@ -142,6 +143,7 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
       imageUrl:        product.imageUrl || '',
       categoryId:      product.categoryId,
       isNew:           product.isNew,
+      isPreorder:      product.isPreorder ?? false,
       isActive:        product.isActive,
       sku:             product.sku || '',
       language:        product.language || 'EN',
@@ -176,7 +178,7 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
       maxPerCustomer:  product.maxPerCustomer ?? '',
       releaseAt:       toLocalInput(product.releaseAt),
     } : {
-      condition: 'NM', isNew: false, isActive: true, stock: 0, language: 'EN',
+      condition: 'NM', isNew: false, isActive: true, isPreorder: false, stock: 0, language: 'EN',
       foil: false, altArt: false,
     },
   })
@@ -496,6 +498,7 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
             <div className="col-span-2 flex flex-wrap gap-4 pt-1">
               <Toggle reg={register('isNew')}    label="Mark as New" />
               <Toggle reg={register('isActive')} label="Active (visible in shop)" />
+              <Toggle reg={register('isPreorder')} label="Pre-order (ซื้อได้ก่อน · ส่งเมื่อของเข้า)" />
             </div>
           </Group>
 

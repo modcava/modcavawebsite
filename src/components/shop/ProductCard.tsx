@@ -84,8 +84,8 @@ export function ProductCard({ product, isWished, onToggleWish, onQuickView, onNo
       el.style.boxShadow = 'none'
       el.style.transform = 'translateY(0)'
     }}>
-      {/* Pre-order corner ribbon — shown for products with a future release date */}
-      {comingSoon && (
+      {/* Pre-order corner ribbon — ซื้อได้ก่อน ส่งภายหลัง (ไม่บล็อกการซื้อ) */}
+      {product.isPreorder && (
         <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, width: 96, height: 96, overflow: 'hidden', zIndex: 2, pointerEvents: 'none' }}>
           <span style={{
             position: 'absolute', left: -34, top: 16, width: 140,
