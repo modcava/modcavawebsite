@@ -479,7 +479,7 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
           )}
 
           {section === 'airbrush' && (
-            <Group title="Airbrush / Tool Details">
+            <Group title="Model Tool Details">
               <Field label="Brand">
                 <input {...register('brand')} className="input" placeholder="Harder & Steenbeck" />
               </Field>

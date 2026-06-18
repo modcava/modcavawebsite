@@ -35,8 +35,8 @@ async function main() {
     }),
     prisma.category.upsert({
       where: { slug: 'model-tools' },
-      update: { name: 'Airbrush', nameTh: 'แอร์บรัช & อุปกรณ์', emoji: '💨' },
-      create: { name: 'Airbrush', nameTh: 'แอร์บรัช & อุปกรณ์', slug: 'model-tools', emoji: '💨' },
+      update: { name: 'Model Tools', nameTh: 'อุปกรณ์โมเดล', emoji: '💨' },
+      create: { name: 'Model Tools', nameTh: 'อุปกรณ์โมเดล', slug: 'model-tools', emoji: '💨' },
     }),
     prisma.category.upsert({
       where: { slug: 'card-accessories' },

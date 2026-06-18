@@ -21,7 +21,7 @@ const VIEWS: { key: ViewKey; label: string; emoji: string; slug: string }[] = [
   { key: 'rb-single',   label: 'Riftbound Singles', emoji: '⚡', slug: 'rb-single' },
   { key: 'rb-sealed',   label: 'Riftbound Sealed',  emoji: '🎁', slug: 'rb-sealed' },
   { key: 'paint',       label: 'Paints',          emoji: '🎨', slug: 'paint' },
-  { key: 'model-tools', label: 'Airbrush',        emoji: '💨', slug: 'model-tools' },
+  { key: 'model-tools', label: 'Model Tools',     emoji: '💨', slug: 'model-tools' },
 ]
 
 // Column definitions per view

@@ -27,7 +27,7 @@ const CAT_EN: Record<string, string> = {
   'rb-single':  'RIFTBOUND SINGLES',
   'rb-sealed':  'RIFTBOUND SEALED',
   paint:        'PAINTS',
-  'model-tools':'AIRBRUSH',
+  'model-tools':'MODEL TOOLS',
   'card-accessories': 'CARD ACCESSORIES',
 }
 
@@ -772,7 +772,7 @@ export function ShopClient({ initialProducts }: Props) {
         <circle cx="11" cy="11" r="2"/>
       </svg>
     )},
-    { cat: 'model-tools',  labelEn: 'Airbrush',            labelTh: 'แอร์บรัช',             icon: (
+    { cat: 'model-tools',  labelEn: 'Model Tools',         labelTh: 'อุปกรณ์โมเดล',          icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13">
         <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
       </svg>
@@ -856,7 +856,7 @@ export function ShopClient({ initialProducts }: Props) {
             { cat: 'rb-single',   emoji: '⚡', en: 'Riftbound Singles',  th: 'Riftbound ใบเดี่ยว' },
             { cat: 'rb-sealed',   emoji: '🎁', en: 'Riftbound Sealed',   th: 'Riftbound ซีล' },
             { cat: 'paint',       emoji: '🎨', en: 'Paints',             th: 'สี' },
-            { cat: 'model-tools', emoji: '💨', en: 'Airbrush',           th: 'แอร์บรัช' },
+            { cat: 'model-tools', emoji: '💨', en: 'Model Tools',        th: 'อุปกรณ์โมเดล' },
             { cat: 'card-accessories', emoji: '🎴', en: 'Card Accessories', th: 'อุปกรณ์การ์ด' },
           ].map((item) => (
             <button key={item.cat} onClick={() => setCurrentCat(item.cat)} style={{
