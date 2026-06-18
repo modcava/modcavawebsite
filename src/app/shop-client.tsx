@@ -28,6 +28,7 @@ const CAT_EN: Record<string, string> = {
   'rb-sealed':  'RIFTBOUND SEALED',
   paint:        'PAINTS',
   'model-tools':'AIRBRUSH',
+  'card-accessories': 'CARD ACCESSORIES',
 }
 
 // MTG mana-color filter icons (optimized WebP in public/icon/)
@@ -113,6 +114,11 @@ export function ShopClient({ initialProducts }: Props) {
   const [modelName, setModelName] = useState('')
   const [modelCatF, setModelCatF] = useState('')
   const [modelInv,  setModelInv]  = useState('all')
+
+  // Card Accessories sidebar
+  const [accName, setAccName] = useState('')
+  const [accCatF, setAccCatF] = useState('')
+  const [accInv,  setAccInv]  = useState('all')
 
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -328,6 +334,7 @@ export function ShopClient({ initialProducts }: Props) {
     rbSealedName, rbSealedCatF, rbSealedInv,
     paintName, paintCatF, paintInv,
     modelName, modelCatF, modelInv,
+    accName, accCatF, accInv,
   ].join('|'), [
     currentCat, searchQ, condFilter, priceFilter, sortFilter,
     mtgName, mtgEdition, mtgFormat, mtgInStock, activeColors, mtgRarities, mtgTypes,
@@ -336,6 +343,7 @@ export function ShopClient({ initialProducts }: Props) {
     rbSealedName, rbSealedCatF, rbSealedInv,
     paintName, paintCatF, paintInv,
     modelName, modelCatF, modelInv,
+    accName, accCatF, accInv,
   ])
   useEffect(() => { setCurrentPage(1) }, [filterKey])
 
@@ -527,6 +535,13 @@ export function ShopClient({ initialProducts }: Props) {
         if (modelInv === 'available' && p.stock === 0) return false
       }
 
+      // Card Accessories sidebar
+      if (currentCat === 'card-accessories') {
+        if (accName && !p.name.toLowerCase().includes(accName.toLowerCase()) && !(p.nameTh || '').toLowerCase().includes(accName.toLowerCase())) return false
+        if (accCatF && p.accessoryCat !== accCatF) return false
+        if (accInv === 'available' && p.stock === 0) return false
+      }
+
       return true
     })
 
@@ -549,6 +564,7 @@ export function ShopClient({ initialProducts }: Props) {
     rbSealedName, rbSealedCatF, rbSealedInv,
     paintName, paintCatF, paintInv,
     modelName, modelCatF, modelInv,
+    accName, accCatF, accInv,
   ])
 
   // Sidebar Category filter options, derived from the products actually in stock.
@@ -557,6 +573,7 @@ export function ShopClient({ initialProducts }: Props) {
     Array.from(new Set(initialProducts.filter((p) => p.category.slug === slug).map(pick).filter((v): v is string => !!v))).sort()
   const paintCatOptions = useMemo(() => distinctValues('paint', (p) => p.paintCat), [initialProducts])
   const modelCatOptions = useMemo(() => distinctValues('model-tools', (p) => p.airbrushCat), [initialProducts])
+  const accCatOptions   = useMemo(() => distinctValues('card-accessories', (p) => p.accessoryCat), [initialProducts])
 
   // helper: แปลง product เป็น CartItem แล้ว addItem (รองรับ qty)
   function addProductToCart(p: (typeof initialProducts)[0], qty = 1) {
@@ -711,6 +728,9 @@ export function ShopClient({ initialProducts }: Props) {
   function resetModel() {
     setModelName(''); setModelCatF(''); setModelInv('all')
   }
+  function resetAccessories() {
+    setAccName(''); setAccCatF(''); setAccInv('all')
+  }
 
   const cartCount = cart.count()
   const wishCount = wishlist.length
@@ -755,6 +775,12 @@ export function ShopClient({ initialProducts }: Props) {
     { cat: 'model-tools',  labelEn: 'Airbrush',            labelTh: 'แอร์บรัช',             icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13">
         <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+      </svg>
+    )},
+    { cat: 'card-accessories', labelEn: 'Card Accessories', labelTh: 'อุปกรณ์การ์ด',        icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13">
+        <rect x="3" y="5" width="13" height="16" rx="2"/>
+        <path d="M8 3h10a2 2 0 012 2v12"/>
       </svg>
     )},
   ]
@@ -831,6 +857,7 @@ export function ShopClient({ initialProducts }: Props) {
             { cat: 'rb-sealed',   emoji: '🎁', en: 'Riftbound Sealed',   th: 'Riftbound ซีล' },
             { cat: 'paint',       emoji: '🎨', en: 'Paints',             th: 'สี' },
             { cat: 'model-tools', emoji: '💨', en: 'Airbrush',           th: 'แอร์บรัช' },
+            { cat: 'card-accessories', emoji: '🎴', en: 'Card Accessories', th: 'อุปกรณ์การ์ด' },
           ].map((item) => (
             <button key={item.cat} onClick={() => setCurrentCat(item.cat)} style={{
               display: 'flex', alignItems: 'center', gap: 6,
@@ -1054,6 +1081,17 @@ export function ShopClient({ initialProducts }: Props) {
               catVal={modelCatF} onCat={setModelCatF}
               catOptions={modelCatOptions}
               onReset={resetModel}
+            />
+          )}
+
+          {/* ── Card Accessories Sidebar ── */}
+          {currentCat === 'card-accessories' && (
+            <SealedSidebar
+              name={accName} onName={setAccName}
+              inv={accInv} onInv={setAccInv}
+              catVal={accCatF} onCat={setAccCatF}
+              catOptions={accCatOptions}
+              onReset={resetAccessories}
             />
           )}
 

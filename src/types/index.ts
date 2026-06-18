@@ -36,6 +36,8 @@ export type ProductWithCategory = Product & {
   colorFamily?:     string | null
   size?:            number | null
   finish?:          string | null
+  // Card Accessories
+  accessoryCat?:    string | null
   // Airbrush / tools
   airbrushCat?:     string | null
   nozzle?:          string | null

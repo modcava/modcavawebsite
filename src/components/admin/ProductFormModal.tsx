@@ -52,6 +52,7 @@ const schema = z.object({
   // Paints
   brand:       z.string().optional(),
   paintCat:    z.string().optional(),
+  accessoryCat: z.string().optional(),
   colorCode:   z.string().optional(),
   colorFamily: z.string().optional(),
   size:        z.union([z.coerce.number().int().nonnegative(), z.literal('')]).optional(),
@@ -87,17 +88,19 @@ const PAINT_CATS   = ['Scalecolor Individuals','Metal N\' Alchemy Singles','Inkt
 const COLOR_FAMILY = ['Neutral','Red','Orange','Yellow','Green','Blue','Purple','Brown','Black','White','Metal','Mixed']
 const FINISHES     = ['Matte','Satin','Gloss','Metallic','Ink','Primer','Effect','Texture']
 const AIRBRUSH_CATS= ['Airbrush','Compressor','Spare Part','Cleaner','Medium','Accessory']
+const ACCESSORY_CATS = ['Sleeve','Deck Box','Playmat','Binder','Dice / Counter','Storage','Other']
 const LANGUAGES    = ['EN','TH','JP','CN','KR','DE','FR','ES','IT']
 const CONDITIONS   = ['NM','LP','MP','HP','DMG','SEALED']
 
 // Map category slug → which dynamic section to show
-function sectionForSlug(slug: string): 'mtg-single' | 'mtg-sealed' | 'rb-single' | 'rb-sealed' | 'paint' | 'airbrush' | 'none' {
+function sectionForSlug(slug: string): 'mtg-single' | 'mtg-sealed' | 'rb-single' | 'rb-sealed' | 'paint' | 'airbrush' | 'card-acc' | 'none' {
   if (slug === 'mtg-single') return 'mtg-single'
   if (slug === 'mtg-sealed') return 'mtg-sealed'
   if (slug === 'rb-single')  return 'rb-single'
   if (slug === 'rb-sealed')  return 'rb-sealed'
   if (slug === 'paint')      return 'paint'
   if (slug === 'model-tools' || slug === 'airbrush') return 'airbrush'
+  if (slug === 'card-accessories') return 'card-acc'
   return 'none'
 }
 
@@ -166,6 +169,7 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
       rbSealedCat:     product.rbSealedCat || '',
       brand:           product.brand || '',
       paintCat:        product.paintCat || '',
+      accessoryCat:    product.accessoryCat || '',
       colorCode:       product.colorCode || '',
       colorFamily:     product.colorFamily || '',
       size:            product.size ?? '',
@@ -458,6 +462,18 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
               </Field>
               <Field label="Finish / Type">
                 <SelectOrEmpty {...register('finish')} options={FINISHES} />
+              </Field>
+            </Group>
+          )}
+
+          {section === 'card-acc' && (
+            <Group title="Card Accessory Details">
+              <Field label="ชนิด (Type)">
+                <ComboInput {...register('accessoryCat')} options={ACCESSORY_CATS} />
+                <Hint text="Sleeve / Deck Box / Playmat / Binder / Dice — หรือพิมพ์ชนิดใหม่ (กลายเป็นตัวกรองในหน้าร้านอัตโนมัติ)" />
+              </Field>
+              <Field label="แบรนด์ (Brand)">
+                <input {...register('brand')} className="input" placeholder="Dragon Shield" />
               </Field>
             </Group>
           )}

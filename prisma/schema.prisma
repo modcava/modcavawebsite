@@ -175,6 +175,7 @@ model Product {
   isNew       Boolean     @default(false) @map("is_new")
   isActive    Boolean     @default(true)  @map("is_active")
   isPreorder  Boolean     @default(false) @map("is_preorder")  // ติดป้าย PRE-ORDER (ซื้อได้ก่อน ส่งภายหลัง)
+  accessoryCat String?    @map("accessory_cat")  // Card Accessories sub-type: Sleeve / Deck Box / Playmat / Dice
   categoryId  String      @map("category_id")
   // Common extra fields
   sku         String?

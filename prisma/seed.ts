@@ -38,6 +38,11 @@ async function main() {
       update: { name: 'Airbrush', nameTh: 'แอร์บรัช & อุปกรณ์', emoji: '💨' },
       create: { name: 'Airbrush', nameTh: 'แอร์บรัช & อุปกรณ์', slug: 'model-tools', emoji: '💨' },
     }),
+    prisma.category.upsert({
+      where: { slug: 'card-accessories' },
+      update: { name: 'Card Accessories', nameTh: 'อุปกรณ์การ์ดเกม', emoji: '🎴' },
+      create: { name: 'Card Accessories', nameTh: 'อุปกรณ์การ์ดเกม', slug: 'card-accessories', emoji: '🎴' },
+    }),
   ])
   console.log('✅ Categories seeded')
 

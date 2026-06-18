@@ -57,6 +57,7 @@ const productSchema = z.object({
   isNew:       z.boolean().default(false),
   isActive:    z.boolean().default(true),
   isPreorder:  z.boolean().default(false),
+  accessoryCat: optStr,
   // ── Common extras ──────────────────────────────────────
   sku:         optStr,
   language:    optStr,
