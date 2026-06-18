@@ -64,7 +64,7 @@ model PointLot {
   expiresAt DateTime @map("expires_at")
   reason    String?                          // order | refund | manual | migration
   orderId   String?  @map("order_id")
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([userId, expiresAt])
   @@index([userId, remaining])
