@@ -139,6 +139,7 @@ const FILTER_FIELDS: Record<string, { field: string; mode: 'eq' | 'contains' | '
   colorFamily:    { field: 'colorFamily',     mode: 'eq' },
   finish:         { field: 'finish',          mode: 'eq' },
   airbrushCat:    { field: 'airbrushCat',     mode: 'eq' },
+  accessoryCat:   { field: 'accessoryCat',    mode: 'eq' },
   nozzle:         { field: 'nozzle',          mode: 'contains' },
   feedType:       { field: 'feedType',        mode: 'eq' },
   compatibleWith: { field: 'compatibleWith',  mode: 'contains' },

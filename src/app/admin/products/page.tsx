@@ -12,7 +12,7 @@ import { parseDomains } from '@/lib/domains'
 const PAGE_SIZE = 50
 
 // ── Views per category (mirrors Modcava_Product_Classification.xlsx) ─
-type ViewKey = 'all' | 'mtg-single' | 'mtg-sealed' | 'rb-single' | 'rb-sealed' | 'paint' | 'model-tools'
+type ViewKey = 'all' | 'mtg-single' | 'mtg-sealed' | 'rb-single' | 'rb-sealed' | 'paint' | 'model-tools' | 'card-accessories'
 
 const VIEWS: { key: ViewKey; label: string; emoji: string; slug: string }[] = [
   { key: 'all',         label: 'ทั้งหมด',          emoji: '📋', slug: '' },
@@ -22,6 +22,7 @@ const VIEWS: { key: ViewKey; label: string; emoji: string; slug: string }[] = [
   { key: 'rb-sealed',   label: 'Riftbound Sealed',  emoji: '🎁', slug: 'rb-sealed' },
   { key: 'paint',       label: 'Paints',          emoji: '🎨', slug: 'paint' },
   { key: 'model-tools', label: 'Model Tools',     emoji: '💨', slug: 'model-tools' },
+  { key: 'card-accessories', label: 'Card Accessories', emoji: '🎴', slug: 'card-accessories' },
 ]
 
 // Column definitions per view
@@ -121,6 +122,17 @@ const COLS: Record<ViewKey, Col[]> = {
     { key: 'limitCustomer',label: 'Lmt/Cust.',  align: 'center' },
     { key: 'status',       label: 'Status' },
   ],
+  'card-accessories': [
+    { key: 'sku',         label: 'SKU' },
+    { key: 'product',     label: 'Product' },
+    { key: 'brand',       label: 'Brand' },
+    { key: 'accessoryCat',label: 'Type' },
+    { key: 'price',        label: 'Price',      align: 'right'  },
+    { key: 'stock',        label: 'Stock',      align: 'right'  },
+    { key: 'limitOrder',   label: 'Lmt/Order',  align: 'center' },
+    { key: 'limitCustomer',label: 'Lmt/Cust.',  align: 'center' },
+    { key: 'status',       label: 'Status' },
+  ],
 }
 
 // Static dropdown options for specific columns (overrides auto-computed values)
@@ -140,6 +152,7 @@ const STATIC_OPTIONS: Record<string, string[]> = {
   colorFamily: ['Neutral','Red','Orange','Yellow','Green','Blue','Purple','Brown','Black','White','Metal','Mixed'],
   finish:      ['Matte','Satin','Gloss'],
   airbrushCat: ['Airbrush','Compressor','Brush','Tool Kit','Glue','Putty','Cutting Mat'],
+  accessoryCat:['Sleeve','Deck Box','Playmat','Binder','Dice / Counter','Storage','Other'],
   feedType:    ['Top-feed','Bottom-feed','Side-feed'],
 }
 
@@ -168,6 +181,7 @@ const FILTER_TYPES: Record<string, FilterType> = {
   finish:         'select',
   size:           'none',
   airbrushCat:    'select',
+  accessoryCat:   'select',
   nozzle:         'text',
   feedType:       'select',
   compatibleWith: 'text',
@@ -204,6 +218,7 @@ function getValue(p: ProductWithCategory, key: string): string | number | boolea
     case 'finish':         return p.finish ?? ''
     case 'size':           return p.size ?? 0
     case 'airbrushCat':    return p.airbrushCat ?? ''
+    case 'accessoryCat':   return p.accessoryCat ?? ''
     case 'nozzle':         return p.nozzle ?? ''
     case 'feedType':       return p.feedType ?? ''
     case 'compatibleWith': return p.compatibleWith ?? ''
@@ -1188,6 +1203,9 @@ function Cell({ colKey, p }: { colKey: string; p: ProductWithCategory }) {
 
     case 'airbrushCat':
       return <span className="text-slate-700 text-xs">{p.airbrushCat || '—'}</span>
+
+    case 'accessoryCat':
+      return <span className="text-slate-700 text-xs">{p.accessoryCat || '—'}</span>
 
     case 'nozzle':
       return <span className="font-mono text-xs text-slate-600">{p.nozzle || '—'}</span>
