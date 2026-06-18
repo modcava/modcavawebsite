@@ -43,11 +43,32 @@ model User {
   addresses Address[]
   auditLogs AuditLog[]
   stockNotifications StockNotification[]
+  pointLots PointLot[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([email])
   @@map("users")
+}
+
+// แต้มสะสมแบบ "ก้อน" (per-lot) เพื่อรองรับวันหมดอายุ
+// แต้มที่ได้แต่ละครั้ง = 1 lot · ใช้แต้มตัด lot ที่ใกล้หมดก่อน (FIFO ตาม expiresAt)
+// user.points = ผลรวม remaining ของ lot ที่ยังไม่หมดอายุ (ดูแล lib/points.ts)
+model PointLot {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int                              // แต้มที่ได้รับครั้งนี้ (คงที่ ไว้อ้างอิง)
+  remaining Int                              // แต้มที่ยังเหลือในก้อนนี้
+  earnedAt  DateTime @default(now()) @map("earned_at")
+  expiresAt DateTime @map("expires_at")
+  reason    String?                          // order | refund | manual | migration
+  orderId   String?  @map("order_id")
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+  @@index([userId, remaining])
+  @@map("point_lots")
 }
 
 // ── Audit log ──────────────────────────────────────────────

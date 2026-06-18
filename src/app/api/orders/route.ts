@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { enforceRateLimit } from '@/lib/rate-limit'
 import { generateOrderNumber } from '@/lib/utils'
+import { spendPoints } from '@/lib/points'
 
 const SHIPPING_FEES: Record<string, number> = { 'Store Pickup': 0, EMS: 50, Flash: 45, SPX: 40 }
 const DEFAULT_SHIPPING_FEE = 60
@@ -216,13 +217,10 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // (5) Atomically deduct points — race-free via WHERE guard.
+      // (5) Atomically deduct points — race-free via WHERE guard + ตัด point lot (FIFO)
       if (pointsDiscount > 0) {
-        const userUpdate = await tx.user.updateMany({
-          where: { id: userId, points: { gte: pointsDiscount } },
-          data: { points: { decrement: pointsDiscount } },
-        })
-        if (userUpdate.count === 0) {
+        const ok = await spendPoints(tx, userId, pointsDiscount)
+        if (!ok) {
           throw new OrderError('แต้มสะสมไม่เพียงพอ กรุณารีเฟรชและลองใหม่')
         }
       }

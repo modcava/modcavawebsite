@@ -6,6 +6,7 @@ import { prisma }           from '@/lib/prisma'
 import { statusStyle, statusLabel } from '@/lib/utils'
 import { AddressBook } from '@/components/account/AddressBook'
 import { ProfileEditButton } from '@/components/account/ProfileEditButton'
+import { getExpiringSoon } from '@/lib/points'
 
 export const metadata = { title: 'บัญชีของฉัน | Modcava' }
 
@@ -33,6 +34,10 @@ export default async function AccountPage() {
   ])
 
   const points  = user?.points ?? 0
+  const expiring = await getExpiringSoon(session.user.id)
+  const expiringDateStr = expiring
+    ? new Date(expiring.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null
 
   const initials = session.user.name
     ? session.user.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
@@ -128,6 +133,16 @@ export default async function AccountPage() {
             <div style={{ fontSize: '.75rem', color: 'var(--ink-2)', marginTop: 4 }}>
               มูลค่า <strong style={{ color: 'var(--sienna)' }}>฿{points.toLocaleString()}</strong> สำหรับใช้เป็นส่วนลด
             </div>
+            {expiring && expiringDateStr && (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 8,
+                padding: '4px 10px', borderRadius: 'var(--r)',
+                background: '#fff3cd', border: '1px solid #ffc107',
+                fontSize: '.74rem', fontWeight: 600, color: '#92610a',
+              }}>
+                ⏳ อีก <strong>{expiring.amount.toLocaleString()}</strong> แต้ม จะหมดอายุภายใน <strong>{expiringDateStr}</strong>
+              </div>
+            )}
           </div>
           <div style={{
             background: 'rgba(255,255,255,.6)', borderRadius: 'var(--r)',

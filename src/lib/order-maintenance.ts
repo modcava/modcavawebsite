@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { sendOrderCancelledEmail } from '@/lib/email'
+import { refundPoints } from '@/lib/points'
 
 // Orders that are still PENDING with no payment slip after this long are
 // abandoned and get auto-cancelled (stock/points/coupon restored).
@@ -44,12 +45,9 @@ export async function sweepExpiredUnpaidOrders(): Promise<number> {
           })
         }
 
-        // Refund loyalty points the customer spent
+        // Refund loyalty points the customer spent (ออก point lot ใหม่อายุ 12 เดือน)
         if (order.pointsUsed > 0) {
-          await tx.user.update({
-            where: { id: order.userId },
-            data: { points: { increment: order.pointsUsed } },
-          })
+          await refundPoints(tx, order.userId, order.pointsUsed, order.id)
         }
 
         // Release one coupon use (guarded so it never goes negative)

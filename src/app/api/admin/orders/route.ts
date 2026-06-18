@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { logAudit } from '@/lib/audit'
 import { sendShippedEmail, sendOrderConfirmedEmail } from '@/lib/email'
+import { earnPoints } from '@/lib/points'
 import { maybeSweepExpiredUnpaidOrders } from '@/lib/order-maintenance'
 import type { OrderStatus } from '@prisma/client'
 
@@ -93,16 +94,13 @@ export async function PATCH(req: NextRequest) {
         include: { user: { select: { id: true, name: true, email: true } }, items: true },
       })
 
-      // เพิ่มแต้มเมื่อเปลี่ยนสถานะเป็น SHIPPED ครั้งแรก
+      // เพิ่มแต้มเมื่อเปลี่ยนสถานะเป็น SHIPPED ครั้งแรก (สร้าง point lot อายุ 12 เดือน)
       if (
         data.status === 'SHIPPED' &&
         existing.status !== 'SHIPPED' &&
         existing.pointsEarned > 0
       ) {
-        await tx.user.update({
-          where: { id: existing.userId },
-          data: { points: { increment: existing.pointsEarned } },
-        })
+        await earnPoints(tx, existing.userId, existing.pointsEarned, { reason: 'order', orderId: id })
       }
 
       return updated

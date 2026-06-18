@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logAudit } from '@/lib/audit'
+import { setPointsManually } from '@/lib/points'
 import { z } from 'zod'
 
 async function requireAdmin() {
@@ -65,11 +66,9 @@ export async function PATCH(req: NextRequest) {
     select: { points: true, email: true },
   })
 
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: { points },
-    select: { id: true, points: true },
-  })
+  // ตั้งแต้มใหม่ + รีเซ็ต point lot (ก้อนเดียวอายุ 12 เดือน) ให้ ledger ตรงกับ balance
+  await setPointsManually(userId, points)
+  const user = { id: userId, points }
 
   if (ctx && before && before.points !== points) {
     await logAudit(ctx, {
