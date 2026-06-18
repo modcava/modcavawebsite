@@ -69,7 +69,7 @@ export function ProductCard({ product, isWished, onToggleWish, onQuickView, onNo
   return (
     <div style={{
       background: '#fff', border: '1px solid var(--divider)',
-      borderRadius: 'var(--r-lg)', overflow: 'hidden',
+      borderRadius: 'var(--r-lg)', overflow: 'hidden', position: 'relative',
       transition: 'all .22s', display: 'flex', flexDirection: 'column',
     }}
     onMouseEnter={(e) => {
@@ -84,6 +84,21 @@ export function ProductCard({ product, isWished, onToggleWish, onQuickView, onNo
       el.style.boxShadow = 'none'
       el.style.transform = 'translateY(0)'
     }}>
+      {/* Pre-order corner ribbon — shown for products with a future release date */}
+      {comingSoon && (
+        <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, width: 96, height: 96, overflow: 'hidden', zIndex: 2, pointerEvents: 'none' }}>
+          <span style={{
+            position: 'absolute', left: -34, top: 16, width: 140,
+            transform: 'rotate(-45deg)', textAlign: 'center', padding: '4px 0',
+            background: 'linear-gradient(135deg, #7c5cff, #4338ca)', color: '#fff',
+            fontSize: '.56rem', fontWeight: 800, letterSpacing: '.12em',
+            boxShadow: '0 2px 6px rgba(0,0,0,.28)',
+          }}>
+            PRE-ORDER
+          </span>
+        </div>
+      )}
+
       {/* Image area — click to open quick view */}
       <div
         onClick={onQuickView}
