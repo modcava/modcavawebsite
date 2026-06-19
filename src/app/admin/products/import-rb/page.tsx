@@ -37,11 +37,15 @@ interface ImportRow extends RiftboundCard {
 
 // Mirrors PRICE_BY_RARITY in src/lib/riftbound.ts
 const PRICE_BY_RARITY: Record<string, number> = {
-  common: 15, uncommon: 25, rare: 35, epic: 45, showcase: 70, legendary: 150,
+  common: 15, uncommon: 25, rare: 30, epic: 45, showcase: 70, legendary: 150,
 }
 function rbPrice(rarity: string): number {
   return PRICE_BY_RARITY[rarity.toLowerCase()] ?? 20
 }
+
+// Mirrors isFoilRarity in src/lib/riftbound.ts — rare and above import as foil.
+const FOIL_RARITIES = new Set(['rare', 'epic', 'showcase', 'legendary'])
+const isFoilRarity = (rarity: string) => FOIL_RARITIES.has(rarity.toLowerCase())
 
 function thumb(url: string | null): string | null {
   if (!url) return null
@@ -397,8 +401,13 @@ export default function ImportRbPage() {
                       <td className="px-3 py-2"><span className="font-mono text-[11px] text-slate-500">{row.publicCode || `${row.setCode} #${row.collectorNumber}`}</span></td>
                       {/* Type */}
                       <td className="px-3 py-2 text-xs text-slate-700">{row.type || '—'}</td>
-                      {/* Rarity */}
-                      <td className="px-3 py-2"><RarityBadge r={row.rarity} /></td>
+                      {/* Rarity (+ auto-foil tag for rare and above) */}
+                      <td className="px-3 py-2">
+                        <RarityBadge r={row.rarity} />
+                        {isFoilRarity(row.rarity) && (
+                          <span className="ml-1 text-[10px] font-bold text-amber-600" title="จะ import เป็น foil อัตโนมัติ">✨</span>
+                        )}
+                      </td>
                       {/* Domain */}
                       <td className="px-3 py-2">
                         <div className="flex gap-0.5 flex-wrap">

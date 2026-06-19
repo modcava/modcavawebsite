@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { logAudit } from '@/lib/audit'
-import { rbDefaultPrice, type RiftboundCard } from '@/lib/riftbound'
+import { rbDefaultPrice, isFoilRarity, type RiftboundCard } from '@/lib/riftbound'
 import { serializeDomains } from '@/lib/domains'
 
 async function requireAdmin() {
@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
           domain:          serializeDomains(card.domains ?? []) || null,
           imageUrl:        card.imageUrl ?? null,
           notes:           card.energy != null ? `Energy ${card.energy}` : null,
+          foil:            isFoilRarity(card.rarity), // Rare+ auto-tagged foil
           altArt:          false,
           isActive:        true,
           isNew:           false,

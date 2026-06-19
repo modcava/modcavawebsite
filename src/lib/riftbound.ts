@@ -38,13 +38,20 @@ export interface RiftboundCard {
 const PRICE_BY_RARITY: Record<string, number> = {
   common:    15,
   uncommon:  25,
-  rare:      35,
+  rare:      30,
   epic:      45,
   showcase:  70,
   legendary: 150,
 }
 export function rbDefaultPrice(rarity: string | null | undefined): number {
   return PRICE_BY_RARITY[(rarity ?? '').toLowerCase()] ?? 20
+}
+
+// Rare and above are auto-tagged as foil on import (Rare / Epic / Showcase /
+// Legendary). Common / Uncommon / unknown stay non-foil.
+const FOIL_RARITIES = new Set(['rare', 'epic', 'showcase', 'legendary'])
+export function isFoilRarity(rarity: string | null | undefined): boolean {
+  return FOIL_RARITIES.has((rarity ?? '').toLowerCase())
 }
 
 // ── Build-ID detection ──────────────────────────────────────────────────────
