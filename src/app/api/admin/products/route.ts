@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { logAudit, diffObjects } from '@/lib/audit'
 import { sendBackInStockEmail } from '@/lib/email'
-import type { Condition } from '@prisma/client'
+import type { Condition, Prisma } from '@prisma/client'
 
 // Notify everyone subscribed to a back-in-stock alert for this product, then clear them.
 // Best-effort: one failed email must not block the others or the product update.
@@ -146,6 +146,43 @@ const FILTER_FIELDS: Record<string, { field: string; mode: 'eq' | 'contains' | '
   status:         { field: 'isActive',        mode: 'status' },
 }
 
+// Map a sort column key (from the admin table) → a real Prisma scalar field.
+// Sort must happen server-side BEFORE pagination, otherwise we'd only reorder
+// the current 50-row page and rows on other pages (e.g. all the stock=0 cards
+// after a bulk import) would never surface. Computed columns (domain, altFoil)
+// have no single DB field, so they're omitted and fall back to createdAt.
+const SORT_FIELDS: Record<string, string> = {
+  product:        'name',
+  set:            'setName',
+  chapter:        'chapter',
+  collector:      'collectorNumber',
+  rarity:         'rarity',
+  rbRarity:       'rbRarity',
+  rbType:         'rbType',
+  foil:           'foil',
+  condition:      'condition',
+  language:       'language',
+  sku:            'sku',
+  sealedCat:      'sealedCat',
+  rbSealedCat:    'rbSealedCat',
+  brand:          'brand',
+  paintCat:       'paintCat',
+  colorCode:      'colorCode',
+  colorFamily:    'colorFamily',
+  finish:         'finish',
+  size:           'size',
+  airbrushCat:    'airbrushCat',
+  accessoryCat:   'accessoryCat',
+  nozzle:         'nozzle',
+  feedType:       'feedType',
+  compatibleWith: 'compatibleWith',
+  price:          'price',
+  stock:          'stock',
+  limitOrder:     'maxPerOrder',
+  limitCustomer:  'maxPerCustomer',
+  status:         'isActive',
+}
+
 export async function GET(req: NextRequest) {
   const guard = await requireAdmin(req)
   if (guard) return guard
@@ -156,6 +193,16 @@ export async function GET(req: NextRequest) {
   const page     = Math.max(1, Number(searchParams.get('page') || 1))
   const pageSize = Math.min(100, Math.max(1, Number(searchParams.get('pageSize') || 50)))
   const distinct = searchParams.get('distinct') || ''
+  const sortKey  = searchParams.get('sort') || ''
+  const sortDir: Prisma.SortOrder = searchParams.get('dir') === 'desc' ? 'desc' : 'asc'
+
+  // Resolve sort → orderBy. Always append `id` as a final tiebreaker so that
+  // when the sort key has many ties (e.g. hundreds of stock=0 rows) pagination
+  // is deterministic and never skips or duplicates rows across pages.
+  const sortField = SORT_FIELDS[sortKey]
+  const orderBy: Prisma.ProductOrderByWithRelationInput[] = sortField
+    ? [{ [sortField]: sortDir } as Prisma.ProductOrderByWithRelationInput, { id: 'asc' }]
+    : [{ createdAt: 'desc' }]
 
   // Parse per-column filters from `f_<key>=<value>` params
   const filterClauses: Record<string, unknown> = {}
@@ -210,7 +257,7 @@ export async function GET(req: NextRequest) {
     prisma.product.findMany({
       where,
       include: { category: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

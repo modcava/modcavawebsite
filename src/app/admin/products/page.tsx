@@ -140,8 +140,8 @@ const STATIC_OPTIONS: Record<string, string[]> = {
   condition:   ['NM', 'LP', 'MP', 'HP', 'DMG', 'SEALED'],
   language:    ['EN', 'TH', 'JP', 'DE', 'FR', 'IT', 'ES', 'PT', 'RU', 'KR', 'CS', 'CT'],
   rarity:      ['Common', 'Uncommon', 'Rare', 'Mythic', 'Special', 'Land', 'Token', 'Promo'],
-  rbRarity:    ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'],
-  rbType:      ['Champion', 'Ally', 'Spell', 'Rune', 'Domain', 'Legend'],
+  rbRarity:    ['Common', 'Uncommon', 'Rare', 'Epic', 'Showcase', 'Legendary'],
+  rbType:      ['Unit', 'Spell', 'Legend', 'Gear', 'Battlefield', 'Rune'],
   altFoil:     ['Foil', 'Alt', 'Foil/Alt'],
   foil:        ['Foil'],
   status:      ['Active', 'Hidden'],
@@ -251,8 +251,8 @@ export default function AdminProductsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkBusy,    setBulkBusy]    = useState(false)
 
-  // Reset page when search/view/filters change
-  useEffect(() => { setPage(1) }, [search, view, filters])
+  // Reset page when search/view/filters/sort change (so a new sort starts at page 1)
+  useEffect(() => { setPage(1) }, [search, view, filters, sort])
   // Reset sort + filters when view changes (columns differ)
   useEffect(() => { setSort(null); setFilters({}) }, [view])
   // Clear selection when switching view, searching, or paging
@@ -280,13 +280,16 @@ export default function AdminProductsPage() {
   )
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-products', search, view, page, filterQueryKey],
+    queryKey: ['admin-products', search, view, page, filterQueryKey, sort?.key ?? '', sort?.dir ?? ''],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (search) params.set('search', search)
       if (activeView.slug) params.set('category', activeView.slug)
       params.set('page', String(page))
       params.set('pageSize', String(PAGE_SIZE))
+      // Server-side sort (so pagination operates on the fully-sorted dataset,
+      // not just the current page) — see SORT_FIELDS in the API route.
+      if (sort) { params.set('sort', sort.key); params.set('dir', sort.dir) }
       // Server-side per-column filters
       Object.entries(filters).forEach(([k, v]) => {
         if (v && v.trim()) params.set(`f_${k}`, v.trim())
@@ -341,12 +344,25 @@ export default function AdminProductsPage() {
     return selectOptions
   }, [selectOptions, view, mtgSetNames])
 
-  // Apply sort client-side (filters are now server-side)
+  // Sort is primarily server-side (so pagination covers the whole dataset).
+  // Columns the API can sort by its own DB field — mirror of SORT_FIELDS in
+  // src/app/api/admin/products/route.ts. For these we trust the server order
+  // and do NOT re-sort here (re-sorting only the current page would re-split
+  // NULL/empty rows across the page boundary). Computed columns not listed
+  // (domain, altFoil) still get a best-effort client sort of the current page.
+  const SERVER_SORTED = useMemo(() => new Set([
+    'product','set','chapter','collector','rarity','rbRarity','rbType','foil',
+    'condition','language','sku','sealedCat','rbSealedCat','brand','paintCat',
+    'colorCode','colorFamily','finish','size','airbrushCat','accessoryCat',
+    'nozzle','feedType','compatibleWith','price','stock','limitOrder',
+    'limitCustomer','status',
+  ]), [])
+
   const products = useMemo(() => {
     let list = rawProducts
 
-    // sort
-    if (sort) {
+    // Only re-sort client-side for columns the server can't sort (computed).
+    if (sort && !SERVER_SORTED.has(sort.key)) {
       const { key, dir } = sort
       list = [...list].sort((a, b) => {
         const av = getValue(a, key)
@@ -366,7 +382,7 @@ export default function AdminProductsPage() {
     }
 
     return list
-  }, [rawProducts, sort])
+  }, [rawProducts, sort, SERVER_SORTED])
 
   function toggleSort(key: string) {
     setSort((cur) => {
@@ -469,6 +485,12 @@ export default function AdminProductsPage() {
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-blue-300 bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition-colors"
           >
             <Download size={14} /> Import MTG
+          </button>
+          <button
+            onClick={() => router.push('/admin/products/import-rb')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-violet-300 bg-violet-50 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors"
+          >
+            <Download size={14} /> Import RB
           </button>
           <button onClick={() => { setEditing(null); setModalOpen(true) }} className="btn-amber gap-2">
             <Plus size={15} /> Add Product
