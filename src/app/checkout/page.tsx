@@ -220,7 +220,12 @@ export default function CheckoutPage() {
       const res = await fetch('/api/coupons/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: couponCode.trim(), subtotal: total() }),
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          subtotal: total(),
+          // Send the cart so the server can scope category-restricted coupons.
+          items: items.map((i) => ({ productId: i.id, quantity: i.quantity })),
+        }),
       })
       if (!res.ok) {
         setCouponError('เกิดข้อผิดพลาด กรุณาลองใหม่')

@@ -19,6 +19,13 @@ const createSchema = z.object({
   maxDiscount: z.number().min(0).optional(),
   usageLimit:  z.number().int().min(1).optional(),
   expiresAt:   z.string().optional(),
+  // ── Influencer attribution (optional) ──
+  influencerName:    z.string().max(120).optional(),
+  influencerContact: z.string().max(160).optional(),
+  commissionType:    z.enum(['PERCENTAGE', 'FIXED_AMOUNT']).optional(),
+  commissionValue:   z.number().min(0).optional(),
+  // Category restriction — list of Category ids the discount applies to ([] = all)
+  categoryIds:       z.array(z.string()).optional(),
 })
 
 export async function GET() {
@@ -41,7 +48,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { code, type, value, minOrder, maxDiscount, usageLimit, expiresAt } = parsed.data
+  const {
+    code, type, value, minOrder, maxDiscount, usageLimit, expiresAt,
+    influencerName, influencerContact, commissionType, commissionValue, categoryIds,
+  } = parsed.data
+
+  // Commission is only meaningful when both type and a positive value are given.
+  const hasCommission = !!commissionType && commissionValue != null && commissionValue > 0
+  // Category restriction — store unique ids as JSON, or null when unrestricted.
+  const cats = Array.from(new Set((categoryIds ?? []).filter(Boolean)))
 
   try {
     const coupon = await prisma.coupon.create({
@@ -53,6 +68,11 @@ export async function POST(req: NextRequest) {
         maxDiscount: maxDiscount ?? null,
         usageLimit:  usageLimit ?? null,
         expiresAt:   expiresAt ? new Date(expiresAt) : null,
+        influencerName:    influencerName?.trim() || null,
+        influencerContact: influencerContact?.trim() || null,
+        commissionType:    hasCommission ? commissionType : null,
+        commissionValue:   hasCommission ? commissionValue : null,
+        categoryIds:       cats.length > 0 ? JSON.stringify(cats) : null,
       },
     })
     await logAudit(

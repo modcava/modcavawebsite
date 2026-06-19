@@ -5,6 +5,8 @@ import { toast } from 'sonner'
 
 type CouponType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'FREE_SHIPPING'
 
+type CommissionType = 'PERCENTAGE' | 'FIXED_AMOUNT'
+
 interface Coupon {
   id: string
   code: string
@@ -17,6 +19,18 @@ interface Coupon {
   expiresAt: string | null
   isActive: boolean
   createdAt: string
+  influencerName: string | null
+  influencerContact: string | null
+  commissionType: CommissionType | null
+  commissionValue: number | null
+  categoryIds: string | null
+}
+
+interface Category { id: string; name: string; nameTh: string | null; slug: string }
+
+function parseCatIds(raw: string | null): string[] {
+  if (!raw) return []
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : [] } catch { return [] }
 }
 
 const S = {
@@ -171,6 +185,11 @@ const defaultForm = {
   maxDiscount: '',
   usageLimit: '',
   expiresAt: '',
+  influencerName: '',
+  influencerContact: '',
+  commissionType: '' as '' | CommissionType,
+  commissionValue: '',
+  categoryIds: [] as string[],
 }
 
 export default function AdminCouponsPage() {
@@ -181,6 +200,22 @@ export default function AdminCouponsPage() {
     queryKey: ['admin-coupons'],
     queryFn: () => fetch('/api/admin/coupons').then((r) => r.json()),
   })
+
+  const { data: catData } = useQuery<{ data: Category[] }>({
+    queryKey: ['categories'],
+    queryFn: () => fetch('/api/categories').then((r) => r.json()),
+  })
+  const categories = catData?.data ?? []
+  const catName = (id: string) => categories.find((c) => c.id === id)?.name ?? id
+
+  function toggleCat(id: string) {
+    setForm((f) => ({
+      ...f,
+      categoryIds: f.categoryIds.includes(id)
+        ? f.categoryIds.filter((x) => x !== id)
+        : [...f.categoryIds, id],
+    }))
+  }
 
   const createMutation = useMutation({
     mutationFn: (body: object) =>
@@ -233,6 +268,14 @@ export default function AdminCouponsPage() {
     if (form.maxDiscount && form.type === 'PERCENTAGE') body.maxDiscount = Number(form.maxDiscount)
     if (form.usageLimit) body.usageLimit = Number(form.usageLimit)
     if (form.expiresAt) body.expiresAt = form.expiresAt
+    // Influencer attribution (optional)
+    if (form.influencerName.trim()) body.influencerName = form.influencerName.trim()
+    if (form.influencerContact.trim()) body.influencerContact = form.influencerContact.trim()
+    if (form.commissionType && form.commissionValue) {
+      body.commissionType = form.commissionType
+      body.commissionValue = Number(form.commissionValue)
+    }
+    if (form.categoryIds.length > 0) body.categoryIds = form.categoryIds
     createMutation.mutate(body)
   }
 
@@ -343,6 +386,95 @@ export default function AdminCouponsPage() {
             </div>
           </div>
 
+          {/* Influencer attribution (optional) */}
+          <div style={{ borderTop: '1px dashed var(--divider)', paddingTop: 16, marginBottom: 18 }}>
+            <div style={{ ...S.label, marginBottom: 12, color: '#7c3aed' }}>
+              อินฟลูเอนเซอร์ (ไม่บังคับ) — ผูกโค้ดกับอินฟลูเพื่อคิดค่าคอมและออกรายงาน
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+              <div>
+                <label style={S.label}>ชื่ออินฟลู</label>
+                <input
+                  style={S.input}
+                  value={form.influencerName}
+                  onChange={(e) => setForm({ ...form, influencerName: e.target.value })}
+                  placeholder="เช่น @nong_tcg"
+                />
+              </div>
+              <div>
+                <label style={S.label}>ติดต่อ (เบอร์/LINE)</label>
+                <input
+                  style={S.input}
+                  value={form.influencerContact}
+                  onChange={(e) => setForm({ ...form, influencerContact: e.target.value })}
+                  placeholder="Optional"
+                />
+              </div>
+              <div>
+                <label style={S.label}>ค่าคอมแบบ</label>
+                <select
+                  style={S.select}
+                  value={form.commissionType}
+                  onChange={(e) => setForm({ ...form, commissionType: e.target.value as '' | CommissionType })}
+                >
+                  <option value="">— ไม่มีค่าคอม —</option>
+                  <option value="PERCENTAGE">% ของยอดสินค้า</option>
+                  <option value="FIXED_AMOUNT">บาท/ออเดอร์</option>
+                </select>
+              </div>
+              <div>
+                <label style={S.label}>{form.commissionType === 'FIXED_AMOUNT' ? 'ค่าคอม (฿)' : 'ค่าคอม (%)'}</label>
+                <input
+                  style={S.input}
+                  type="number"
+                  min={0}
+                  value={form.commissionValue}
+                  onChange={(e) => setForm({ ...form, commissionValue: e.target.value })}
+                  placeholder={form.commissionType === 'FIXED_AMOUNT' ? '20' : '5'}
+                  disabled={!form.commissionType}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Category restriction (optional) */}
+          <div style={{ borderTop: '1px dashed var(--divider)', paddingTop: 16, marginBottom: 18 }}>
+            <div style={{ ...S.label, marginBottom: 4, color: '#0c5460' }}>
+              ใช้ได้กับหมวดสินค้า (ไม่เลือก = ทุกหมวด)
+            </div>
+            <div style={{ fontSize: '.72rem', color: 'var(--ink-3)', marginBottom: 12 }}>
+              ถ้าเลือกบางหมวด ส่วนลดจะคิดเฉพาะยอดสินค้าในหมวดที่เลือกเท่านั้น
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {categories.map((c) => {
+                const on = form.categoryIds.includes(c.id)
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleCat(c.id)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 'var(--r)',
+                      border: `1.5px solid ${on ? '#0c5460' : 'var(--divider)'}`,
+                      background: on ? '#e8f4fd' : 'var(--paper-2)',
+                      color: on ? '#0c5460' : 'var(--ink-2)',
+                      fontSize: '.78rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all .15s',
+                    }}
+                  >
+                    {on ? '✓ ' : ''}{c.name}
+                  </button>
+                )
+              })}
+              {categories.length === 0 && (
+                <span style={{ fontSize: '.78rem', color: 'var(--ink-3)' }}>กำลังโหลดหมวด…</span>
+              )}
+            </div>
+          </div>
+
           <button
             type="submit"
             style={{ ...S.submitBtn, opacity: createMutation.isPending ? .6 : 1 }}
@@ -370,6 +502,7 @@ export default function AdminCouponsPage() {
                   <th style={S.th}>Code</th>
                   <th style={S.th}>Type</th>
                   <th style={S.th}>Value</th>
+                  <th style={S.th}>Influencer</th>
                   <th style={S.th}>Min Order</th>
                   <th style={S.th}>Used / Limit</th>
                   <th style={S.th}>Expires</th>
@@ -390,7 +523,26 @@ export default function AdminCouponsPage() {
                         {c.type === 'PERCENTAGE' ? '%' : c.type === 'FIXED_AMOUNT' ? '฿' : 'Ship'}
                       </span>
                     </td>
-                    <td style={S.td}>{formatValue(c)}</td>
+                    <td style={S.td}>
+                      {formatValue(c)}
+                      {parseCatIds(c.categoryIds).length > 0 && (
+                        <div style={{ fontSize: '.66rem', color: '#0c5460', marginTop: 3, fontWeight: 600 }}>
+                          เฉพาะ: {parseCatIds(c.categoryIds).map(catName).join(', ')}
+                        </div>
+                      )}
+                    </td>
+                    <td style={S.td}>
+                      {c.influencerName || c.commissionType ? (
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '.78rem' }}>{c.influencerName || '—'}</div>
+                          {c.commissionType && (
+                            <div style={{ fontSize: '.7rem', color: '#7c3aed' }}>
+                              คอม {c.commissionType === 'PERCENTAGE' ? `${c.commissionValue}%` : `฿${Number(c.commissionValue).toLocaleString()}`}
+                            </div>
+                          )}
+                        </div>
+                      ) : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                    </td>
                     <td style={S.td}>{c.minOrder ? `฿${Number(c.minOrder).toLocaleString()}` : '—'}</td>
                     <td style={S.td}>
                       {c.usedCount} / {c.usageLimit ?? '∞'}

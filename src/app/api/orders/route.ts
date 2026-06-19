@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { enforceRateLimit } from '@/lib/rate-limit'
 import { generateOrderNumber } from '@/lib/utils'
 import { spendPoints } from '@/lib/points'
+import { parseCategoryIds, eligibleSubtotal } from '@/lib/coupon'
 
 const SHIPPING_FEES: Record<string, number> = { 'Store Pickup': 0, EMS: 50, Flash: 45, SPX: 40 }
 const DEFAULT_SHIPPING_FEE = 60
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
   const productIds = items.map((i) => i.productId)
   const dbProducts = await prisma.product.findMany({
     where: { id: { in: productIds }, isActive: true },
-    select: { id: true, price: true, stock: true, name: true, maxPerOrder: true, maxPerCustomer: true, releaseAt: true },
+    select: { id: true, price: true, stock: true, name: true, maxPerOrder: true, maxPerCustomer: true, releaseAt: true, categoryId: true },
   })
 
   if (dbProducts.length !== productIds.length) {
@@ -118,21 +119,46 @@ export async function POST(req: NextRequest) {
     if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
       return NextResponse.json({ error: 'Coupon usage limit reached' }, { status: 400 })
     }
-    if (coupon.minOrder !== null && subtotal < Number(coupon.minOrder)) {
+
+    // Category restriction: the discount applies only to items in the allowed
+    // categories. With no restriction, eligibleBase == subtotal (whole cart).
+    const allowedCats = parseCategoryIds(coupon.categoryIds)
+    const lineItems = items.map((i) => ({
+      categoryId: dbProducts.find((p) => p.id === i.productId)!.categoryId,
+      lineTotal:  priceMap[i.productId] * i.quantity,
+    }))
+    const eligibleBase = eligibleSubtotal(lineItems, allowedCats)
+    if (allowedCats.length > 0 && eligibleBase <= 0) {
+      return NextResponse.json({ error: 'คูปองนี้ใช้กับสินค้าในตะกร้าไม่ได้ (จำกัดเฉพาะบางหมวด)' }, { status: 400 })
+    }
+    if (coupon.minOrder !== null && eligibleBase < Number(coupon.minOrder)) {
       return NextResponse.json({ error: 'Order subtotal below coupon minimum' }, { status: 400 })
     }
 
     if (coupon.type === 'PERCENTAGE') {
-      couponDiscount = (subtotal * Number(coupon.value)) / 100
+      couponDiscount = (eligibleBase * Number(coupon.value)) / 100
       if (coupon.maxDiscount !== null) {
         couponDiscount = Math.min(couponDiscount, Number(coupon.maxDiscount))
       }
     } else if (coupon.type === 'FIXED_AMOUNT') {
-      couponDiscount = Math.min(Number(coupon.value), subtotal)
+      couponDiscount = Math.min(Number(coupon.value), eligibleBase)
     } else if (coupon.type === 'FREE_SHIPPING') {
       freeShipping = true
     }
     couponDiscount = Math.round(couponDiscount * 100) / 100
+  }
+
+  // Influencer commission for this order (snapshot onto the order so payout
+  // reports stay stable even if the coupon is later edited). Based on subtotal
+  // (gross product total) — the sales the influencer's code drove.
+  let commissionAmount = 0
+  if (coupon && coupon.commissionType && coupon.commissionValue != null) {
+    if (coupon.commissionType === 'PERCENTAGE') {
+      commissionAmount = (subtotal * Number(coupon.commissionValue)) / 100
+    } else {
+      commissionAmount = Number(coupon.commissionValue)
+    }
+    commissionAmount = Math.round(commissionAmount * 100) / 100
   }
 
   const userSnapshot = await prisma.user.findUnique({ where: { id: userId }, select: { points: true } })
@@ -263,6 +289,7 @@ export async function POST(req: NextRequest) {
           pointsEarned,
           discount:       couponDiscount,
           shippingFee,
+          commissionAmount,
           couponId:       coupon?.id ?? null,
           items: {
             create: items.map((i) => ({

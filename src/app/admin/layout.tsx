@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import Link from 'next/link'
-import { LayoutDashboard, Package, ShoppingCart, ArrowLeft, Tag, BookOpen, FileText, Mail, Shield, History } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingCart, ArrowLeft, Tag, BookOpen, FileText, Mail, Shield, History, Users } from 'lucide-react'
 
 export const metadata = { title: { template: '%s | Admin — MOCAVA', default: 'Admin — MOCAVA' } }
 
@@ -15,6 +15,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     { href: '/admin/products',   icon: Package,         label: 'Products'   },
     { href: '/admin/orders',     icon: ShoppingCart,    label: 'Orders'     },
     { href: '/admin/coupons',    icon: Tag,             label: 'Coupons'    },
+    { href: '/admin/influencers',icon: Users,           label: 'Influencers'},
     { href: '/admin/accounts',   icon: BookOpen,        label: 'Members'    },
     { href: '/admin/invoices',   icon: FileText,        label: 'Invoices'   },
     { href: '/admin/send-email', icon: Mail,            label: 'ส่งเมล'      },
