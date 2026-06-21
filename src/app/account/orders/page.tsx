@@ -89,6 +89,8 @@ export default async function OrdersPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {orders.map((order) => {
             const total    = typeof order.total === 'object' ? order.total.toNumber() : Number(order.total)
+            const surcharge = typeof order.surcharge === 'object' ? order.surcharge.toNumber() : Number(order.surcharge)
+            const isCard   = order.paymentMethod === 'Credit Card'
             const badgeSt  = statusStyle(order.status)
             const label    = statusLabel(order.status)
             const dateStr  = new Date(order.createdAt).toLocaleDateString('th-TH', {
@@ -192,8 +194,8 @@ export default async function OrdersPage() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    {/* ปุ่มชำระสินค้า / ส่งสลิปใหม่ — ซ่อนเมื่อยกเลิกหรือยืนยันแล้ว */}
-                    {order.status !== 'CANCELLED' && order.status !== 'CONFIRMED' && (
+                    {/* ปุ่มชำระเงิน — แสดงเฉพาะออเดอร์ที่ยังไม่ชำระ (PENDING) */}
+                    {order.status === 'PENDING' && (
                       <Link href={`/orders/${order.orderNumber}/payment`} style={{
                         display: 'inline-flex', alignItems: 'center', gap: 6,
                         padding: '7px 16px',
@@ -204,7 +206,7 @@ export default async function OrdersPage() {
                         fontSize: '.78rem', textDecoration: 'none',
                         whiteSpace: 'nowrap', transition: 'opacity .18s',
                       }}>
-                        {order.slipUrl ? '🔄 ส่งสลิปใหม่' : '💳 ชำระสินค้า'}
+                        {isCard ? '💳 ทักเพจชำระบัตร' : order.slipUrl ? '🔄 ส่งสลิปใหม่' : '💳 ชำระสินค้า'}
                       </Link>
                     )}
 
@@ -213,6 +215,11 @@ export default async function OrdersPage() {
                       <div style={{ fontFamily: "'Lora', serif", fontSize: '1.2rem', fontWeight: 600, color: 'var(--sienna)' }}>
                         {formatPrice(total)}
                       </div>
+                      {surcharge > 0 && (
+                        <div style={{ fontSize: '.62rem', color: 'var(--ink-3)', marginTop: 1 }}>
+                          รวมค่าบริการบัตร ฿{surcharge.toLocaleString()}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

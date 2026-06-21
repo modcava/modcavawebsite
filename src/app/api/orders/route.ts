@@ -12,6 +12,8 @@ const SHIPPING_FEES: Record<string, number> = { 'Store Pickup': 0, EMS: 50, Flas
 const DEFAULT_SHIPPING_FEE = 60
 // Free shipping once the post-discount product total (after coupon + points) reaches this amount.
 const FREE_SHIPPING_THRESHOLD = 1000
+// Surcharge added when paying by credit card (manual "DM the page for a link" flow).
+const CARD_SURCHARGE_RATE = 0.05
 
 // Validation errors thrown inside the transaction → caught and returned as 400
 class OrderError extends Error {
@@ -34,7 +36,7 @@ const checkoutSchema = z.object({
   province:       z.string().min(1),
   postalCode:     z.string().length(5),
   shippingMethod: z.string().default('Kerry'),
-  paymentMethod:  z.string().default('PromptPay'),
+  paymentMethod:  z.enum(['PromptPay', 'Credit Card']).default('PromptPay'),
   note:           z.string().optional(),
   couponCode:     z.string().optional(),
   pointsToUse:    z.number().int().min(0).default(0),
@@ -172,8 +174,16 @@ export async function POST(req: NextRequest) {
   const qualifiesFreeShipping = freeShipping || netAfterDiscounts >= FREE_SHIPPING_THRESHOLD
 
   const shippingFee = qualifiesFreeShipping ? 0 : (SHIPPING_FEES[shipping.shippingMethod] ?? DEFAULT_SHIPPING_FEE)
-  const grandTotal = Math.max(0, subtotal + shippingFee - couponDiscount - pointsDiscount)
-  const pointsEarned = Math.floor(grandTotal / 100)
+
+  // Credit-card surcharge: +5% on the net payable (after discounts, incl. shipping),
+  // applied only when the customer chose to pay by card. Computed server-side so the
+  // client can't tamper with it. Points are earned on the pre-surcharge amount.
+  const payableBeforeCard = Math.max(0, subtotal + shippingFee - couponDiscount - pointsDiscount)
+  const cardSurcharge = shipping.paymentMethod === 'Credit Card'
+    ? Math.round(payableBeforeCard * CARD_SURCHARGE_RATE * 100) / 100
+    : 0
+  const grandTotal = payableBeforeCard + cardSurcharge
+  const pointsEarned = Math.floor(payableBeforeCard / 100)
 
   // ──────────────────────────────────────────────────────────────
   // TRANSACTION (re-verify atomically + commit mutations together)
@@ -289,6 +299,7 @@ export async function POST(req: NextRequest) {
           pointsEarned,
           discount:       couponDiscount,
           shippingFee,
+          surcharge:      cardSurcharge,
           commissionAmount,
           couponId:       coupon?.id ?? null,
           items: {

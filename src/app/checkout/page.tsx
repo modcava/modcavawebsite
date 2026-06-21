@@ -350,8 +350,12 @@ export default function CheckoutPage() {
   const netAfterDiscounts = subtotal - couponDiscount - pointsDiscount
   const freeShipping = !!couponResult?.freeShipping || netAfterDiscounts >= FREE_SHIPPING_THRESHOLD
   const shippingFee = freeShipping ? 0 : (SHIPPING_FEE[shipping] ?? 60)
-  const grandTotal = Math.max(0, subtotal + shippingFee - couponDiscount - pointsDiscount)
-  const pointsToEarn = Math.floor(grandTotal / 100)
+  // Credit-card surcharge (+5% on net payable). Mirrors the server — see CARD_SURCHARGE_RATE
+  // in src/app/api/orders/route.ts. Points are earned on the pre-surcharge amount.
+  const payableBeforeCard = Math.max(0, subtotal + shippingFee - couponDiscount - pointsDiscount)
+  const cardSurcharge = payment === 'Credit Card' ? Math.round(payableBeforeCard * 0.05 * 100) / 100 : 0
+  const grandTotal = payableBeforeCard + cardSurcharge
+  const pointsToEarn = Math.floor(payableBeforeCard / 100)
   // How much more (after discounts) the customer needs to spend to unlock free shipping
   const freeShipRemaining = Math.max(0, FREE_SHIPPING_THRESHOLD - netAfterDiscounts)
 
@@ -475,6 +479,31 @@ export default function CheckoutPage() {
             </div>
           </div>
 
+
+          {/* Payment Method */}
+          <div style={S.card}>
+            <div style={S.sectionTitle}>💳 วิธีชำระเงิน</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[
+                { id: 'PromptPay',   label: '🏦 โอน / PromptPay', note: 'ไม่มีค่าบริการ' },
+                { id: 'Credit Card', label: '💳 บัตรเครดิต',       note: '+5% ค่าบริการ' },
+              ].map(({ id, label, note }) => (
+                <button key={id} type="button" onClick={() => setPayment(id)} style={{
+                  ...S.radioCard(payment === id),
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  padding: '12px 8px', gap: 4,
+                }}>
+                  <span style={{ fontSize: '.84rem' }}>{label}</span>
+                  <span style={{ fontSize: '.72rem', opacity: .8 }}>{note}</span>
+                </button>
+              ))}
+            </div>
+            {payment === 'Credit Card' && (
+              <p style={{ fontSize: '.74rem', color: '#92610a', background: '#fff3cd', border: '1px solid #ffe08a', borderRadius: 'var(--r)', padding: '8px 12px', marginTop: 12, lineHeight: 1.5 }}>
+                💬 หลังสั่งซื้อ กรุณา<strong>ทักเพจ</strong>เพื่อรับลิงก์ชำระผ่านบัตรเครดิต (มีค่าบริการ +5% รวมในยอดแล้ว)
+              </p>
+            )}
+          </div>
 
           {/* Note */}
           <div style={S.card}>
@@ -683,6 +712,12 @@ export default function CheckoutPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.82rem', color: '#28a745', fontWeight: 600 }}>
                 <span>ส่วนลดแต้มสะสม</span>
                 <span>-฿{pointsDiscount.toLocaleString()}</span>
+              </div>
+            )}
+            {cardSurcharge > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.82rem', color: 'var(--ink-2)' }}>
+                <span>ค่าบริการบัตรเครดิต (5%)</span>
+                <span>+฿{cardSurcharge.toLocaleString()}</span>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--divider)', paddingTop: 10, marginTop: 4 }}>

@@ -1,24 +1,24 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
-// ── ข้อมูลบัญชีธนาคาร — แก้ตรงนี้ ──────────────────────────
-const BANK_ACCOUNTS = [
-  {
-    bank:    'กสิกรไทย (KBank)',
-    logo:    '🟩',
-    account: '123-4-56789-0',
-    name:    'บริษัท โมคาวา จำกัด',
-  },
-  {
-    bank:    'ไทยพาณิชย์ (SCB)',
-    logo:    '🟪',
-    account: '123-456789-0',
-    name:    'บริษัท โมคาวา จำกัด',
-  },
-]
+// Facebook page for the manual credit-card payment-link flow.
+const MESSENGER_URL = 'https://m.me/Modcavashop'
+
+interface OrderInfo {
+  paymentMethod: string | null
+  total: number
+  surcharge: number
+  status: string
+}
+
+// ── ข้อมูลรับโอน — แก้ตรงนี้ ──────────────────────────────
+// รูปบัญชี + QR อยู่ใน public/icon/ (เสิร์ฟที่ /icon/account.png, /icon/QR.jpg)
+const ACCOUNT_IMAGE = '/icon/account.png'
+const QR_IMAGE      = '/icon/QR.jpg'
+const ACCOUNT_NO    = '9352236288' // เลขบัญชีสำหรับปุ่มคัดลอก (935-223628-8)
 // ──────────────────────────────────────────────────────────────
 
 export default function PaymentPage() {
@@ -32,6 +32,41 @@ export default function PaymentPage() {
   const [done, setDone]       = useState(false)
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Fetch the order so we can branch the UI by payment method.
+  const [order, setOrder] = useState<OrderInfo | null>(null)
+  const [loadingOrder, setLoadingOrder] = useState(true)
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/orders/${orderNumber}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.data) setOrder(d.data) })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoadingOrder(false) })
+    return () => { alive = false }
+  }, [orderNumber])
+
+  // Switch payment method (only while PENDING). Server recomputes total + surcharge.
+  const [switching, setSwitching] = useState(false)
+  async function changeMethod(method: 'PromptPay' | 'Credit Card') {
+    if (switching || order?.paymentMethod === method) return
+    setSwitching(true)
+    try {
+      const res = await fetch(`/api/orders/${orderNumber}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentMethod: method }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error || 'เปลี่ยนวิธีชำระเงินไม่สำเร็จ'); return }
+      setOrder((o) => (o ? { ...o, paymentMethod: d.data.paymentMethod, total: d.data.total, surcharge: d.data.surcharge } : o))
+      toast.success(method === 'Credit Card' ? 'เปลี่ยนเป็นบัตรเครดิตแล้ว (+5%)' : 'เปลี่ยนเป็นโอนเงิน/PromptPay แล้ว')
+    } catch {
+      toast.error('เกิดข้อผิดพลาด กรุณาลองใหม่')
+    } finally {
+      setSwitching(false)
+    }
+  }
 
   function handleFile(f: File) {
     if (!f.type.startsWith('image/')) { toast.error('รองรับเฉพาะไฟล์รูปภาพ'); return }
@@ -95,6 +130,86 @@ export default function PaymentPage() {
     )
   }
 
+  // Loading the order → decide which payment UI to show
+  if (loadingOrder) {
+    return (
+      <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', fontSize: '.9rem' }}>
+        กำลังโหลด…
+      </div>
+    )
+  }
+
+  // ── Credit-card flow: DM the page for a payment link (no bank transfer) ──
+  if (order?.paymentMethod === 'Credit Card') {
+    return (
+      <div style={{ maxWidth: 560, margin: '0 auto', padding: '40px 20px 80px' }}>
+        <div className="eyebrow" style={{ marginBottom: 6 }}>ชำระเงิน</div>
+        <h1 style={{ fontFamily: "'Lora', serif", fontSize: '1.8rem', fontWeight: 600, color: 'var(--ink)', marginBottom: 6 }}>
+          ชำระผ่านบัตรเครดิต
+        </h1>
+        <p style={{ fontSize: '.84rem', color: 'var(--ink-3)', marginBottom: 24 }}>
+          คำสั่งซื้อ <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--sienna)' }}>{orderNumber}</span>
+        </p>
+
+        {/* Amount */}
+        <div style={{ background: '#fff', border: '1px solid var(--divider)', borderRadius: 'var(--r-lg)', padding: '20px 22px', marginBottom: 18, textAlign: 'center' }}>
+          <div style={{ fontSize: '.78rem', color: 'var(--ink-3)', marginBottom: 6 }}>ยอดที่ต้องชำระ</div>
+          <div style={{ fontFamily: "'Lora', serif", fontSize: '2rem', fontWeight: 700, color: 'var(--sienna)' }}>
+            ฿{order.total.toLocaleString()}
+          </div>
+          {order.surcharge > 0 && (
+            <div style={{ fontSize: '.74rem', color: 'var(--ink-3)', marginTop: 4 }}>
+              (รวมค่าบริการบัตรเครดิต 5% ฿{order.surcharge.toLocaleString()})
+            </div>
+          )}
+        </div>
+
+        {/* Steps + CTA */}
+        <div style={{ background: '#fff', border: '1px solid var(--divider)', borderRadius: 'var(--r-lg)', padding: '20px 22px' }}>
+          <div style={{ fontSize: '.88rem', fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>
+            💳 วิธีชำระผ่านบัตรเครดิต
+          </div>
+          <ol style={{ margin: 0, paddingLeft: 18, fontSize: '.84rem', color: 'var(--ink-2)', lineHeight: 1.9 }}>
+            <li>กดปุ่ม <strong>&ldquo;ทักเพจรับลิงก์&rdquo;</strong> ด้านล่าง</li>
+            <li>แจ้ง<strong>เลขคำสั่งซื้อ {orderNumber}</strong> กับแอดมิน</li>
+            <li>แอดมินจะส่ง<strong>ลิงก์ชำระผ่านบัตรเครดิต</strong>ให้</li>
+            <li>ชำระผ่านลิงก์ → ออเดอร์จะได้รับการยืนยัน</li>
+          </ol>
+
+          <a href={`${MESSENGER_URL}?ref=${encodeURIComponent(orderNumber)}`} target="_blank" rel="noopener noreferrer"
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 18, padding: '13px', background: '#0084ff', color: '#fff', borderRadius: 'var(--r)', fontSize: '.9rem', fontWeight: 700, textDecoration: 'none' }}>
+            💬 ทักเพจรับลิงก์ชำระบัตร
+          </a>
+          <p style={{ fontSize: '.72rem', color: 'var(--ink-3)', marginTop: 12, lineHeight: 1.6 }}>
+            * ออเดอร์จะอยู่ในสถานะ &ldquo;รอชำระเงิน&rdquo; จนกว่าจะชำระเสร็จ · เก็บเลขคำสั่งซื้อไว้แจ้งแอดมิน
+          </p>
+        </div>
+
+        {/* Switch to bank transfer */}
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <button
+            onClick={() => changeMethod('PromptPay')}
+            disabled={switching}
+            style={{
+              padding: '9px 16px', fontSize: '.8rem', fontWeight: 600,
+              background: 'transparent', color: 'var(--ink-2)',
+              border: '1px solid var(--divider)', borderRadius: 'var(--r)',
+              cursor: switching ? 'wait' : 'pointer', opacity: switching ? .6 : 1,
+            }}
+          >
+            🏦 เปลี่ยนเป็นโอนเงิน / PromptPay (ไม่มีค่าบริการ)
+          </button>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <Link href="/account/orders" style={{ fontSize: '.82rem', color: 'var(--ink-3)', textDecoration: 'none' }}>
+            ← ดูคำสั่งซื้อของฉัน
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 20px 80px' }}>
 
@@ -110,46 +225,73 @@ export default function PaymentPage() {
         </span>
       </p>
 
-      {/* Bank accounts */}
+      {/* QR + bank account images */}
       <div style={{
         background: '#fff', border: '1px solid var(--divider)',
         borderRadius: 'var(--r-lg)', padding: '20px 22px', marginBottom: 20,
       }}>
         <div style={{ fontSize: '.88rem', fontWeight: 700, color: 'var(--ink)', marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--divider)' }}>
-          🏦 บัญชีรับโอนเงิน
+          🏦 ช่องทางชำระเงิน
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {BANK_ACCOUNTS.map((acc, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              background: 'var(--paper-2)', borderRadius: 'var(--r)',
-              padding: '14px 16px',
-            }}>
-              <span style={{ fontSize: '1.8rem', flexShrink: 0 }}>{acc.logo}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--ink-3)', marginBottom: 2 }}>{acc.bank}</div>
-                <div style={{ fontFamily: 'monospace', fontSize: '1.15rem', fontWeight: 700, color: 'var(--ink)', letterSpacing: '.06em' }}>
-                  {acc.account}
-                </div>
-                <div style={{ fontSize: '.78rem', color: 'var(--ink-2)', marginTop: 2 }}>{acc.name}</div>
-              </div>
-              <button
-                onClick={() => { navigator.clipboard.writeText(acc.account.replace(/-/g, '')); toast.success('คัดลอกเลขบัญชีแล้ว') }}
-                style={{
-                  padding: '6px 12px', fontSize: '.72rem', fontWeight: 600,
-                  background: 'var(--sienna-bg)', color: 'var(--sienna)',
-                  border: '1px solid var(--sienna)', borderRadius: 'var(--r)',
-                  cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                }}
-              >
-                คัดลอก
-              </button>
+
+        {/* Account (left) + QR (right) on the same row — wraps to stacked on mobile */}
+        <div style={{ display: 'flex', gap: 18, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+
+          {/* Bank account card image (left) */}
+          <div style={{ flex: '1 1 260px', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={ACCOUNT_IMAGE}
+              alt="บัญชีธนาคารไทยพาณิชย์ 935-223628-8 อิทธิ มงคลวัฒน์"
+              style={{ width: '100%', maxWidth: 320, height: 'auto', borderRadius: 'var(--r)' }}
+            />
+            <button
+              onClick={() => { navigator.clipboard.writeText(ACCOUNT_NO); toast.success('คัดลอกเลขบัญชีแล้ว') }}
+              style={{
+                padding: '7px 16px', fontSize: '.78rem', fontWeight: 600,
+                background: 'var(--sienna-bg)', color: 'var(--sienna)',
+                border: '1px solid var(--sienna)', borderRadius: 'var(--r)',
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              📋 คัดลอกเลขบัญชี
+            </button>
+          </div>
+
+          {/* PromptPay / Thai QR (right) */}
+          <div style={{ flex: '0 1 220px', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={QR_IMAGE}
+              alt="Thai QR Payment / PromptPay — Modcava"
+              style={{ width: '100%', maxWidth: 220, height: 'auto', borderRadius: 'var(--r)' }}
+            />
+            <div style={{ fontSize: '.78rem', color: 'var(--ink-2)', fontWeight: 600, textAlign: 'center' }}>
+              📱 สแกน QR เพื่อโอน
             </div>
-          ))}
+          </div>
+
         </div>
-        <p style={{ fontSize: '.74rem', color: 'var(--ink-3)', marginTop: 14, lineHeight: 1.6 }}>
+
+        <p style={{ fontSize: '.74rem', color: 'var(--ink-3)', marginTop: 16, lineHeight: 1.6 }}>
           * โปรดโอนเงินให้ตรงกับยอดที่แสดงในคำสั่งซื้อ และส่งสลิปด้านล่างหลังโอนเสร็จ
         </p>
+      </div>
+
+      {/* Switch to credit card */}
+      <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <button
+          onClick={() => changeMethod('Credit Card')}
+          disabled={switching}
+          style={{
+            padding: '9px 16px', fontSize: '.8rem', fontWeight: 600,
+            background: 'transparent', color: 'var(--ink-2)',
+            border: '1px solid var(--divider)', borderRadius: 'var(--r)',
+            cursor: switching ? 'wait' : 'pointer', opacity: switching ? .6 : 1,
+          }}
+        >
+          💳 ต้องการชำระด้วยบัตรเครดิต? (+5%)
+        </button>
       </div>
 
       {/* Upload slip */}
