@@ -13,7 +13,7 @@
 อินเทอร์เน็ต ──HTTPS──> Nginx (80/443) ──proxy──> Next.js (next start, :3000)  [จัดการโดย PM2]
                                                           │
                                                           └──> MySQL 8.0 (Docker, :3306)
-cron ทุก 15 นาที ──> POST /api/cron/cancel-unpaid-orders  (ยกเลิกออเดอร์ไม่แนบสลิป 48 ชม.)
+cron ──> /api/cron/cancel-unpaid-orders (15 นาที) · release-notify (5 นาที) · expire-points (รายวัน)
 ```
 
 ข้อเท็จจริงของโปรเจกต์:
@@ -315,18 +315,25 @@ sudo certbot renew --dry-run     # ทดสอบต่ออายุอัต
 
 ---
 
-## 12. ตั้ง Cron ยกเลิกออเดอร์ค้างชำระ (48 ชม.)
+## 12. ตั้ง Cron งานเบื้องหลัง (ใช้ `CRON_SECRET`)
 ```bash
 crontab -e
 ```
-เพิ่มบรรทัด (เปลี่ยน CRON_SECRET เป็นค่าใน `.env`):
+เพิ่ม 3 บรรทัด (เปลี่ยน `<CRON_SECRET>` เป็นค่าใน `.env`):
 ```cron
+# ยกเลิกออเดอร์ไม่แนบสลิปภายใน 48 ชม. — ทุก 15 นาที
 */15 * * * * curl -fsS -X POST -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api/cron/cancel-unpaid-orders >> /var/log/mocava-cron.log 2>&1
+# แจ้งเตือน "สินค้าวางจำหน่าย/กลับมามีของ" (เมลถึงลูกค้าที่กด 🔔) — ทุก 5 นาที
+*/5 * * * * curl -fsS -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api/cron/release-notify >> /var/log/mocava-cron.log 2>&1
+# หมดอายุแต้มสะสมเกิน 12 เดือน — วันละครั้งตี 4
+0 4 * * * curl -fsS -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api/cron/expire-points >> /var/log/mocava-cron.log 2>&1
 ```
-ทดสอบยิงเอง 1 ครั้ง:
+> ⚠️ **`release-notify` จำเป็นต่อเมล "วางจำหน่ายเร็วๆ นี้"** — สินค้าที่ตั้ง `releaseAt` จะกลายเป็นขายได้เพราะ *เวลาผ่านไป* ไม่มี admin edit มาจุดชนวน ถ้าไม่ตั้ง cron นี้ ลูกค้าที่กด 🔔 จะ **ไม่ได้เมล** เมื่อถึงเวลาวางขาย
+
+ทดสอบยิงเอง 1 ครั้ง (ควรได้ `{"ok":true,...}`):
 ```bash
-curl -X POST -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api/cron/cancel-unpaid-orders
-# ควรได้ {"ok":true,"cancelled":N}
+curl -X POST -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api/cron/cancel-unpaid-orders   # {"ok":true,"cancelled":N}
+curl       -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api/cron/release-notify           # {"ok":true,"products":N,"sent":M}
 ```
 
 ---
@@ -417,7 +424,8 @@ pm2 logs mocava --lines 50
 - [ ] ล็อกอินด้วย Google ได้ (redirect URI ถูก)
 - [ ] สั่งซื้อ → อัปโหลดสลิปได้ → ไฟล์อยู่ใน `public/slips/`
 - [ ] เพิ่มสินค้า + อัปโหลดรูป → **รูปขึ้นจริงในหน้าเว็บ** (`curl -sI https://yourdomain.com/uploads/<ไฟล์> ` ได้ 200)
-- [ ] ยิง cron endpoint ได้ `{"ok":true}`
+- [ ] ตั้ง crontab ครบ 3 ตัว (cancel-unpaid-orders, **release-notify**, expire-points) + ยิงเองได้ `{"ok":true}`
+- [ ] ทดสอบเมล "วางจำหน่าย": ตั้งสินค้า `releaseAt` อดีต + มี subscriber → ยิง `release-notify` → ได้ `sent>0`
 - [ ] กด Authorize Gmail แล้วทดสอบส่งอีเมล
 - [ ] `pm2 status` = online, `docker compose ps` = healthy
 - [ ] ลอง reboot server → เว็บกลับมาเองทั้ง PM2 และ MySQL
