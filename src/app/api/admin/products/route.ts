@@ -5,31 +5,8 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { logAudit, diffObjects } from '@/lib/audit'
-import { sendBackInStockEmail } from '@/lib/email'
+import { notifyBackInStock } from '@/lib/stock-notify'
 import type { Condition, Prisma } from '@prisma/client'
-
-// Notify everyone subscribed to a back-in-stock alert for this product, then clear them.
-// Best-effort: one failed email must not block the others or the product update.
-async function notifyBackInStock(productId: string, productName: string) {
-  const subs = await prisma.stockNotification.findMany({
-    where: { productId },
-    include: { user: { select: { name: true, email: true } } },
-  })
-  if (subs.length === 0) return
-
-  const appUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
-  for (const sub of subs) {
-    const to = sub.email || sub.user.email
-    if (!to) continue
-    try {
-      await sendBackInStockEmail({ to, name: sub.user.name ?? '', productName, productUrl: `${appUrl}/` })
-    } catch (e) {
-      console.error('[stock-notify] failed to email', to, e)
-    }
-  }
-  // Clear subscriptions once handled (single-shot alert)
-  await prisma.stockNotification.deleteMany({ where: { productId } })
-}
 
 interface AdminCtx { userId: string; userEmail: string }
 async function getAdminCtx(): Promise<AdminCtx | null> {
