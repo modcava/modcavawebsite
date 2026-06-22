@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth'
 import { Providers } from './providers'
 import { ManaSymbols } from '@/components/shop/ManaSymbols'
 import { MessengerButton } from '@/components/layout/MessengerButton'
+import { safeJsonLd } from '@/lib/utils'
 import './globals.css'
 
 const inter = Inter({
@@ -62,7 +63,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="th" data-lang="en" className={`${inter.variable} ${lora.variable}`}>
       <head>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd({
           '@context': 'https://schema.org',
           '@type': 'Store',
           name: 'Modcava',

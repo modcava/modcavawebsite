@@ -22,6 +22,8 @@ backups/
 *.sql.gz
 
 # Runtime uploads (สลิปลูกค้า) — เก็บใน server จริง ไม่ต้องขึ้น repo
+# สลิป = ข้อมูลการเงิน เก็บนอก public/ (เสิร์ฟผ่าน /api/slips เท่านั้น)
+private/
 public/slips/
 public/uploads/
 

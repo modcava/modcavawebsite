@@ -83,3 +83,13 @@ export function generateOrderNumber(): string {
 export function truncate(str: string, n: number): string {
   return str.length > n ? str.slice(0, n) + '…' : str
 }
+
+/**
+ * Serialize data for embedding in an inline <script type="application/ld+json">.
+ * JSON.stringify does NOT escape `<`, so a value containing `</script>` could
+ * break out of the tag — escape `<` to `<` to neutralise that. Use for all
+ * dangerouslySetInnerHTML JSON-LD blocks.
+ */
+export function safeJsonLd(data: unknown): string {
+  return JSON.stringify(data).replace(/</g, '\\u003c')
+}

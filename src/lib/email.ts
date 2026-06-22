@@ -10,6 +10,20 @@ const transporter = nodemailer.createTransport({
   },
 })
 
+/**
+ * Escape ค่าที่ผู้ใช้/แอดมินกรอก (เช่น ชื่อ, ชื่อสินค้า, เลขพัสดุ) ก่อนฝังลง HTML email
+ * — กัน HTML injection. ไม่ใช้กับ URL ที่ระบบสร้างเอง หรือ HTML ที่แอดมินตั้งใจส่ง
+ * (sendCustomEmail).
+ */
+function esc(s: string | null | undefined): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 /** ส่งอีเมล HTML ตรงๆ ผ่าน SMTP — ใช้ร่วมกันทั้งเมลแจ้งเตือนออเดอร์และเมลที่แอดมินพิมพ์เอง */
 export async function sendCustomEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
   const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
@@ -28,7 +42,7 @@ export async function sendResetPasswordEmail(to: string, name: string, resetUrl:
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
         <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">รีเซ็ตรหัสผ่าน</h2>
-        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${name || 'คุณ'},<br/>เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับบัญชีของคุณ</p>
+        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${esc(name) || 'คุณ'},<br/>เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับบัญชีของคุณ</p>
         <a href="${resetUrl}"
           style="display:inline-block;padding:12px 28px;background:#8b5a2b;color:#fff;border-radius:8px;font-weight:700;text-decoration:none;font-size:15px;">
           รีเซ็ตรหัสผ่าน
@@ -56,7 +70,7 @@ export async function sendOrderConfirmedEmail(opts: {
 
   const itemsHtml = opts.items.map((it) => `
     <tr>
-      <td style="padding:6px 0;color:#6b5e4e;font-size:14px;">${it.productName} × ${it.quantity}</td>
+      <td style="padding:6px 0;color:#6b5e4e;font-size:14px;">${esc(it.productName)} × ${it.quantity}</td>
       <td style="padding:6px 0;text-align:right;color:#2a2218;font-size:14px;white-space:nowrap;">฿${(it.price * it.quantity).toLocaleString()}</td>
     </tr>`).join('')
 
@@ -70,7 +84,7 @@ export async function sendOrderConfirmedEmail(opts: {
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
         <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">✅ ยืนยันออเดอร์เรียบร้อยแล้ว!</h2>
-        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${opts.name || 'คุณ'},<br/>เราได้รับและตรวจสอบการชำระเงินของคุณเรียบร้อยแล้ว ออเดอร์กำลังเตรียมจัดส่ง — เราจะแจ้งเลขพัสดุให้ทราบอีกครั้งเมื่อจัดส่งแล้ว</p>
+        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${esc(opts.name) || 'คุณ'},<br/>เราได้รับและตรวจสอบการชำระเงินของคุณเรียบร้อยแล้ว ออเดอร์กำลังเตรียมจัดส่ง — เราจะแจ้งเลขพัสดุให้ทราบอีกครั้งเมื่อจัดส่งแล้ว</p>
         <div style="background:#fff;border:1px solid #e5ddd4;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
           <p style="color:#6b5e4e;margin:0 0 10px;">หมายเลขออเดอร์: <strong style="color:#2a2218;">#${opts.orderNumber}</strong></p>
           <table style="width:100%;border-collapse:collapse;border-top:1px solid #e5ddd4;">
@@ -103,7 +117,7 @@ export async function sendShippedEmail(opts: {
   const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
 
   const trackingLine = opts.trackingNumber
-    ? `<p style="color:#6b5e4e;margin:0;">เลขพัสดุ: <strong style="color:#2a2218;">${opts.trackingNumber}</strong></p>`
+    ? `<p style="color:#6b5e4e;margin:0;">เลขพัสดุ: <strong style="color:#2a2218;">${esc(opts.trackingNumber)}</strong></p>`
     : ''
 
   await sendCustomEmail({
@@ -112,10 +126,10 @@ export async function sendShippedEmail(opts: {
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
         <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">📦 พัสดุของคุณถูกจัดส่งแล้ว!</h2>
-        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${opts.name || 'คุณ'},<br/>ออเดอร์ของคุณได้รับการจัดส่งเรียบร้อยแล้ว</p>
+        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${esc(opts.name) || 'คุณ'},<br/>ออเดอร์ของคุณได้รับการจัดส่งเรียบร้อยแล้ว</p>
         <div style="background:#fff;border:1px solid #e5ddd4;border-radius:8px;padding:16px 20px;margin-bottom:20px;display:flex;flex-direction:column;gap:8px;">
           <p style="color:#6b5e4e;margin:0;">หมายเลขออเดอร์: <strong style="color:#2a2218;">#${opts.orderNumber}</strong></p>
-          <p style="color:#6b5e4e;margin:0;">ขนส่ง: <strong style="color:#2a2218;">${opts.shippingMethod}</strong></p>
+          <p style="color:#6b5e4e;margin:0;">ขนส่ง: <strong style="color:#2a2218;">${esc(opts.shippingMethod)}</strong></p>
           ${trackingLine}
         </div>
         <p style="color:#a08060;font-size:13px;">หากมีคำถามหรือปัญหาใดๆ สามารถติดต่อเราได้ที่ Line OA หรือ Facebook: Modcavashop</p>
@@ -136,11 +150,11 @@ export async function sendBackInStockEmail(opts: {
 
   await sendCustomEmail({
     to:      opts.to,
-    subject: `[${appName}] สินค้ากลับมาแล้ว — ${opts.productName}`,
+    subject: `[${appName}] สินค้ากลับมาแล้ว — ${esc(opts.productName)}`,
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
         <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">🎉 สินค้าที่คุณรอ พร้อมจำหน่ายแล้ว!</h2>
-        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${opts.name || 'คุณ'},<br/><strong style="color:#2a2218;">${opts.productName}</strong> พร้อมจำหน่ายแล้ว — รีบสั่งก่อนของจะหมด!</p>
+        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${esc(opts.name) || 'คุณ'},<br/><strong style="color:#2a2218;">${esc(opts.productName)}</strong> พร้อมจำหน่ายแล้ว — รีบสั่งก่อนของจะหมด!</p>
         <a href="${opts.productUrl}"
           style="display:inline-block;padding:12px 28px;background:#8b5a2b;color:#fff;border-radius:8px;font-weight:700;text-decoration:none;font-size:15px;">
           ดูสินค้า
@@ -166,7 +180,7 @@ export async function sendOrderCancelledEmail(opts: {
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
         <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">ออเดอร์ถูกยกเลิกอัตโนมัติ</h2>
-        <p style="color:#6b5e4e;margin-bottom:16px;">สวัสดี ${opts.name || 'คุณ'},<br/>ออเดอร์ <strong style="color:#2a2218;">#${opts.orderNumber}</strong> ถูกยกเลิกเนื่องจากไม่ได้แนบสลิปการโอนเงินภายใน 48 ชั่วโมง</p>
+        <p style="color:#6b5e4e;margin-bottom:16px;">สวัสดี ${esc(opts.name) || 'คุณ'},<br/>ออเดอร์ <strong style="color:#2a2218;">#${opts.orderNumber}</strong> ถูกยกเลิกเนื่องจากไม่ได้แนบสลิปการโอนเงินภายใน 48 ชั่วโมง</p>
         <p style="color:#6b5e4e;margin:0;">แต้มสะสมและคูปองที่ใช้ (ถ้ามี) ถูกคืนให้เรียบร้อยแล้ว — หากยังต้องการสินค้า สามารถสั่งซื้อใหม่ได้ที่ร้านค้า</p>
         <hr style="border:none;border-top:1px solid #e5ddd4;margin:24px 0;"/>
         <p style="color:#c4b49a;font-size:11px;">© ${new Date().getFullYear()} ${appName}</p>
@@ -186,7 +200,7 @@ export async function sendVerificationEmail(to: string, name: string, verifyUrl:
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
         <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">ยินดีต้อนรับสู่ ${appName}!</h2>
-        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${name || 'คุณ'},<br/>กรุณาคลิกปุ่มด้านล่างเพื่อยืนยันอีเมลและเริ่มใช้งานบัญชี</p>
+        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${esc(name) || 'คุณ'},<br/>กรุณาคลิกปุ่มด้านล่างเพื่อยืนยันอีเมลและเริ่มใช้งานบัญชี</p>
         <a href="${verifyUrl}"
           style="display:inline-block;padding:12px 28px;background:#8b5a2b;color:#fff;border-radius:8px;font-weight:700;text-decoration:none;font-size:15px;">
           ยืนยันอีเมล

@@ -20,7 +20,7 @@ cron ──> /api/cron/cancel-unpaid-orders (15 นาที) · release-notify 
 - **Next.js 14.2.5** — build ด้วย `npm run build`, รันด้วย `npm run start` (พอร์ต 3000)
 - **MySQL 8.0** ผ่าน Docker Compose (มี `docker-compose.yml` อยู่แล้ว)
 - ใช้ **`prisma db push`** ซิงค์ schema (โปรเจกต์นี้ยังไม่มี migration files)
-- ไฟล์สลิปการโอนถูกเก็บที่ `public/slips/` — ต้อง persist
+- ไฟล์สลิปการโอนถูกเก็บที่ `private/slips/` (นอก public/ — เสิร์ฟผ่าน /api/slips เท่านั้น) — ต้อง persist
 - ใช้ Google OAuth (ล็อกอิน) + Gmail API (ส่งอีเมล) — ต้องตั้ง redirect URI สำหรับโดเมนจริง
 
 ---
@@ -270,8 +270,8 @@ server {
         expires 30d;
         add_header Cache-Control "public, max-age=2592000";
     }
-    # ── สลิปการโอน: ห้ามเข้าถึงตรงๆ (ข้อมูลการเงินลูกค้า / PDPA) ──────
-    # เข้าผ่าน /api/slips/<file> ที่เช็คสิทธิ์เท่านั้น — บล็อก path เดิม /slips/
+    # ── สลิปการโอน: เก็บใน private/slips/ (นอก public/) เข้าผ่าน /api/slips/<file>
+    # ที่เช็คสิทธิ์เท่านั้น. บล็อก /slips/ ไว้เป็น defense-in-depth (เผื่อไฟล์เก่า)
     location /slips/ {
         return 403;
     }
@@ -352,14 +352,15 @@ curl       -H "Authorization: Bearer <CRON_SECRET>" https://yourdomain.com/api/c
 ---
 
 ## 14. ไฟล์อัปโหลด (สลิปการโอน + รูปสินค้า) ให้ persist
-- สลิปเก็บที่ `~/mocava/public/slips/` · รูปสินค้าเก็บที่ `~/mocava/public/uploads/`
+- สลิปเก็บที่ `~/mocava/private/slips/` (นอก public/) · รูปสินค้าเก็บที่ `~/mocava/public/uploads/`
 - **รูปสินค้า** เสิร์ฟผ่าน Nginx โดยตรง (สาธารณะได้) — ดูข้อ 10
-- **สลิปการโอน** ⚠️ เป็นข้อมูลการเงินลูกค้า เสิร์ฟผ่าน route `/api/slips/<file>` ที่เช็คสิทธิ์
-  (เจ้าของออเดอร์/แอดมินเท่านั้น) — path เดิม `/slips/` ถูก Nginx บล็อก `return 403` (ดูข้อ 10)
+- **สลิปการโอน** ⚠️ เป็นข้อมูลการเงินลูกค้า เก็บนอก `public/` จึงเสิร์ฟ static ไม่ได้เลย —
+  เข้าได้ทางเดียวผ่าน route `/api/slips/<file>` ที่เช็คสิทธิ์ (เจ้าของออเดอร์/แอดมินเท่านั้น).
+  ปรับที่เก็บได้ด้วย env `SLIPS_DIR=/abs/path` (ดีฟอลต์ = `<project>/private/slips`)
 - **ตอนอัปเดตเว็บภายหลัง อย่าลบ 2 โฟลเดอร์นี้** (ข้อมูลลูกค้า + รูปสินค้าอยู่ในนั้น)
 - รวม 2 โฟลเดอร์นี้ไว้ในการ backup ด้วย
 ```bash
-mkdir -p ~/mocava/public/slips ~/mocava/public/uploads
+mkdir -p ~/mocava/private/slips ~/mocava/public/uploads
 ```
 
 ---
@@ -405,7 +406,7 @@ crontab -e
 **วิธีแมนนวล** (เผื่ออัปโหลดไฟล์เองด้วย scp แทน git, หรือ debug ทีละขั้น):
 ```bash
 cd ~/mocava
-git pull                 # หรืออัปโหลดไฟล์ใหม่ทับ (ยกเว้น .env, public/slips, public/uploads)
+git pull                 # หรืออัปโหลดไฟล์ใหม่ทับ (ยกเว้น .env, private/slips, public/uploads)
 npm ci                   # เฉพาะเมื่อ dependencies เปลี่ยน
 npx prisma db push       # เฉพาะเมื่อแก้ schema
 NODE_OPTIONS="--max-old-space-size=3072" npm run build   # RAM ≤ 2GB ต้องตั้ง heap (ดูข้อ 8)
@@ -422,7 +423,7 @@ pm2 logs mocava --lines 50
 - [ ] `https://yourdomain.com` เปิดได้ มีกุญแจ HTTPS
 - [ ] ล็อกอิน admin ได้ → เพิ่มสินค้าได้
 - [ ] ล็อกอินด้วย Google ได้ (redirect URI ถูก)
-- [ ] สั่งซื้อ → อัปโหลดสลิปได้ → ไฟล์อยู่ใน `public/slips/`
+- [ ] สั่งซื้อ → อัปโหลดสลิปได้ → ไฟล์อยู่ใน `private/slips/`
 - [ ] เพิ่มสินค้า + อัปโหลดรูป → **รูปขึ้นจริงในหน้าเว็บ** (`curl -sI https://yourdomain.com/uploads/<ไฟล์> ` ได้ 200)
 - [ ] ตั้ง crontab ครบ 3 ตัว (cancel-unpaid-orders, **release-notify**, expire-points) + ยิงเองได้ `{"ok":true}`
 - [ ] ทดสอบเมล "วางจำหน่าย": ตั้งสินค้า `releaseAt` อดีต + มี subscriber → ยิง `release-notify` → ได้ `sent>0`

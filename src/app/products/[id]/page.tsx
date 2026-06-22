@@ -8,6 +8,7 @@ import { Footer } from '@/components/layout/Footer'
 import { ProductActions } from '@/components/shop/ProductActions'
 import { isComingSoon, formatReleaseDate } from '@/lib/release'
 import { formatDomains } from '@/lib/domains'
+import { safeJsonLd } from '@/lib/utils'
 
 // ISR: แคชหน้าไว้ 60 วิ (เร็วขึ้น + ลดภาระ DB) — สต็อก/ราคาอาจช้าได้สูงสุด 60 วิ
 // แต่ตอนหยิบลงตะกร้า/เช็คเอาต์มีการตรวจสต็อกจริงอีกชั้น
@@ -137,7 +138,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
     <>
       <Header />
       <main style={{ flex: 1, maxWidth: 1100, margin: '0 auto', padding: '20px 24px 48px', width: '100%' }}>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
 
         {/* Breadcrumb */}
         <nav aria-label="breadcrumb" style={{ fontSize: '.8rem', color: 'var(--ink-3)', marginBottom: 18, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
