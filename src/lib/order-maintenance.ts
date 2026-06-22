@@ -1,10 +1,55 @@
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { sendOrderCancelledEmail } from '@/lib/email'
-import { refundPoints } from '@/lib/points'
+import { refundPoints, clawbackEarnedPoints } from '@/lib/points'
 
 // Orders that are still PENDING with no payment slip after this long are
 // abandoned and get auto-cancelled (stock/points/coupon restored).
 const UNPAID_TTL_MS = 48 * 60 * 60 * 1000 // 48 hours
+
+type Tx = Prisma.TransactionClient
+
+interface RestorableOrder {
+  id: string
+  userId: string
+  pointsUsed: number
+  couponId: string | null
+  items: { productId: string; quantity: number }[]
+}
+
+/**
+ * คืนทรัพยากรที่ออเดอร์ "กินไป" ตอนสร้าง — สต็อก, แต้มที่ลูกค้าใช้, สิทธิ์คูปอง —
+ * และดึงแต้มที่เคยให้ (ถ้าออเดอร์เคยถึง SHIPPED) กลับ. ใช้ร่วมกันทั้ง auto-cancel
+ * (cron) และการที่แอดมินกดยกเลิกเอง เพื่อให้ logic คืนค่าอยู่ที่เดียว.
+ *
+ * ต้องรันภายใน transaction และผู้เรียกต้องกันไม่ให้เรียกซ้ำบนออเดอร์เดิม
+ * (เช่น เช็คว่าสถานะเดิม !== CANCELLED ก่อน) มิฉะนั้นสต็อกจะถูกบวกซ้ำ.
+ */
+export async function restoreOrderResources(tx: Tx, order: RestorableOrder): Promise<void> {
+  // (1) คืนสต็อกทุกบรรทัด
+  for (const it of order.items) {
+    await tx.product.update({
+      where: { id: it.productId },
+      data: { stock: { increment: it.quantity } },
+    })
+  }
+
+  // (2) คืนแต้มที่ลูกค้าใช้ (ออก point lot ใหม่อายุ 12 เดือน)
+  if (order.pointsUsed > 0) {
+    await refundPoints(tx, order.userId, order.pointsUsed, order.id)
+  }
+
+  // (3) คืนสิทธิ์คูปอง 1 ครั้ง (guarded so it never goes negative)
+  if (order.couponId) {
+    await tx.coupon.updateMany({
+      where: { id: order.couponId, usedCount: { gt: 0 } },
+      data: { usedCount: { decrement: 1 } },
+    })
+  }
+
+  // (4) ดึงแต้มที่เคยให้ของออเดอร์นี้คืน (no-op ถ้ายังไม่เคยให้ เช่น PENDING)
+  await clawbackEarnedPoints(tx, order.userId, order.id)
+}
 
 /**
  * Cancel every PENDING order that has no payment slip and is older than 48h.
@@ -37,26 +82,8 @@ export async function sweepExpiredUnpaidOrders(): Promise<number> {
         })
         if (!fresh || fresh.status !== 'PENDING' || fresh.slipUrl) return false
 
-        // Restore stock for each line item
-        for (const it of order.items) {
-          await tx.product.update({
-            where: { id: it.productId },
-            data: { stock: { increment: it.quantity } },
-          })
-        }
-
-        // Refund loyalty points the customer spent (ออก point lot ใหม่อายุ 12 เดือน)
-        if (order.pointsUsed > 0) {
-          await refundPoints(tx, order.userId, order.pointsUsed, order.id)
-        }
-
-        // Release one coupon use (guarded so it never goes negative)
-        if (order.couponId) {
-          await tx.coupon.updateMany({
-            where: { id: order.couponId, usedCount: { gt: 0 } },
-            data: { usedCount: { decrement: 1 } },
-          })
-        }
+        // Restore stock, spent points, and coupon usage (shared with admin cancel)
+        await restoreOrderResources(tx, order)
 
         await tx.order.update({
           where: { id: order.id },

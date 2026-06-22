@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/auth'
 import { logAudit } from '@/lib/audit'
 import { sendShippedEmail, sendOrderConfirmedEmail } from '@/lib/email'
 import { earnPoints } from '@/lib/points'
-import { maybeSweepExpiredUnpaidOrders } from '@/lib/order-maintenance'
+import { maybeSweepExpiredUnpaidOrders, restoreOrderResources } from '@/lib/order-maintenance'
 import type { OrderStatus } from '@prisma/client'
 
 async function requireAdmin(req: NextRequest) {
@@ -75,7 +75,7 @@ export async function PATCH(req: NextRequest) {
 
   const { id, ...data } = parsed.data
 
-  // ดึง order เดิมก่อน เพื่อเช็คว่าเปลี่ยนจาก non-CONFIRMED → CONFIRMED
+  // ดึง order เดิมก่อน เพื่อใช้เทียบสถานะตอนส่งอีเมล / audit หลัง tx
   const existing = await prisma.order.findUnique({
     where: { id },
     select: { status: true, userId: true, pointsEarned: true },
@@ -88,19 +88,52 @@ export async function PATCH(req: NextRequest) {
   let order
   try {
     order = await prisma.$transaction(async (tx) => {
+      // ล็อกแถวออเดอร์ก่อน เพื่อ serialize การเปลี่ยนสถานะที่เข้ามาพร้อมกัน
+      // (กันการให้แต้ม/คืนสต็อกซ้ำ จากการกดรัว หรือแอดมินสองคนพร้อมกัน)
+      await tx.$queryRaw`SELECT id FROM orders WHERE id = ${id} FOR UPDATE`
+
+      // อ่านสถานะปัจจุบันภายใต้ล็อก — ใช้ตัดสินใจให้/คืนแต้มแบบ atomic
+      const current = await tx.order.findUnique({
+        where: { id },
+        select: {
+          status: true, userId: true, pointsUsed: true, pointsEarned: true,
+          couponId: true,
+          items: { select: { productId: true, quantity: true } },
+        },
+      })
+      if (!current) throw new Error('Order not found')
+
       const updated = await tx.order.update({
         where: { id },
         data: data as { status?: OrderStatus; trackingNumber?: string },
         include: { user: { select: { id: true, name: true, email: true } }, items: true },
       })
 
-      // เพิ่มแต้มเมื่อเปลี่ยนสถานะเป็น SHIPPED ครั้งแรก (สร้าง point lot อายุ 12 เดือน)
+      // เพิ่มแต้มเมื่อเปลี่ยนเป็น SHIPPED ครั้งแรก — ให้ "ครั้งเดียว" จริงๆ
+      // เช็คว่ามี point lot ของออเดอร์นี้ (reason='order') อยู่แล้วหรือยัง เพื่อกัน
+      // การบวกแต้มซ้ำจากการสลับสถานะ SHIPPED→CONFIRMED→SHIPPED
       if (
         data.status === 'SHIPPED' &&
-        existing.status !== 'SHIPPED' &&
-        existing.pointsEarned > 0
+        current.status !== 'SHIPPED' &&
+        current.pointsEarned > 0
       ) {
-        await earnPoints(tx, existing.userId, existing.pointsEarned, { reason: 'order', orderId: id })
+        const alreadyCredited = await tx.pointLot.count({
+          where: { orderId: id, reason: 'order' },
+        })
+        if (alreadyCredited === 0) {
+          await earnPoints(tx, current.userId, current.pointsEarned, { reason: 'order', orderId: id })
+        }
+      }
+
+      // คืนสต็อก/แต้ม/คูปอง เมื่อเปลี่ยนเป็น CANCELLED ครั้งแรก (กันคืนซ้ำด้วยเงื่อนไขสถานะ)
+      if (data.status === 'CANCELLED' && current.status !== 'CANCELLED') {
+        await restoreOrderResources(tx, {
+          id,
+          userId:     current.userId,
+          pointsUsed: current.pointsUsed,
+          couponId:   current.couponId,
+          items:      current.items,
+        })
       }
 
       return updated

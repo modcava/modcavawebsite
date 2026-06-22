@@ -66,6 +66,34 @@ export async function refundPoints(
   return earnPoints(tx, userId, amount, { reason: 'refund', orderId: orderId ?? null })
 }
 
+/**
+ * ดึงแต้มที่ "เคยให้ไปแล้ว" ของออเดอร์คืน (กรณียกเลิกออเดอร์ที่เคยถึง SHIPPED)
+ * — ตัดเฉพาะส่วนที่ยังไม่ถูกใช้ (lot.remaining) ของ lot ที่ผูกกับออเดอร์นี้
+ *   (reason='order'). แต้มที่ลูกค้าใช้ไปแล้วเอาคืนไม่ได้ · กัน balance ติดลบ
+ * — ถ้าออเดอร์ยังไม่เคยให้แต้ม (เช่น PENDING) จะเป็น no-op
+ * lot ถูก zero ทิ้งไว้ → กันการให้แต้มซ้ำหากกลับเป็น SHIPPED อีกครั้ง
+ */
+export async function clawbackEarnedPoints(
+  tx: Tx, userId: string, orderId: string,
+): Promise<void> {
+  const lots = await tx.pointLot.findMany({
+    where: { userId, orderId, reason: 'order', remaining: { gt: 0 } },
+    select: { remaining: true },
+  })
+  const clawable = lots.reduce((s, l) => s + l.remaining, 0)
+  if (clawable <= 0) return
+
+  const u = await tx.user.findUnique({ where: { id: userId }, select: { points: true } })
+  const dec = Math.min(u?.points ?? 0, clawable)   // กัน balance ติดลบ
+  if (dec > 0) {
+    await tx.user.update({ where: { id: userId }, data: { points: { decrement: dec } } })
+  }
+  await tx.pointLot.updateMany({
+    where: { userId, orderId, reason: 'order', remaining: { gt: 0 } },
+    data: { remaining: 0 },
+  })
+}
+
 /** แอดมินตั้งแต้มเอง — ล้าง lot เดิมแล้วสร้างก้อนเดียวเท่ายอดใหม่ (อายุ 12 เดือน) */
 export async function setPointsManually(userId: string, points: number): Promise<void> {
   await prisma.$transaction(async (tx) => {
