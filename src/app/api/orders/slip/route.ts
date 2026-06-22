@@ -21,9 +21,14 @@ export async function POST(req: Request) {
   // ตรวจสอบว่า order เป็นของ user นี้
   const order = await prisma.order.findFirst({
     where: { orderNumber, userId: session.user.id },
-    select: { id: true },
+    select: { id: true, status: true },
   })
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+
+  // อัปสลิปได้เฉพาะออเดอร์ที่ยังรอชำระเงิน — กันอัปทับออเดอร์ที่ยืนยัน/ยกเลิก/ส่งแล้ว
+  if (order.status !== 'PENDING') {
+    return NextResponse.json({ error: 'ออเดอร์นี้ไม่อยู่ในสถานะที่อัปโหลดสลิปได้' }, { status: 400 })
+  }
 
   // ตรวจสอบชนิดไฟล์
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']

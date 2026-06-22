@@ -20,7 +20,9 @@ export async function GET(req: NextRequest) {
     prisma.order.count(),
     prisma.order.aggregate({
       _sum: { total: true },
-      where: { status: { not: 'CANCELLED' } },
+      // รายได้จริง = นับเฉพาะออเดอร์ที่ชำระเงินแล้ว (ยืนยัน/จัดส่ง/ส่งถึง)
+      // ไม่รวม PENDING (ยังไม่จ่าย) และ CANCELLED (ยกเลิก)
+      where: { status: { in: ['CONFIRMED', 'SHIPPED', 'DELIVERED'] } },
     }),
     prisma.product.count({ where: { isActive: true } }),
     prisma.user.count({ where: { role: 'CUSTOMER' } }),
