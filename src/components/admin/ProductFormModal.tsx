@@ -475,6 +475,9 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
               <Field label="แบรนด์ (Brand)">
                 <input {...register('brand')} className="input" placeholder="Dragon Shield" />
               </Field>
+              <Field label="SKU" span={2}>
+                <input {...register('sku')} className="input" placeholder="DS-SLEEVE-100" />
+              </Field>
             </Group>
           )}
 
