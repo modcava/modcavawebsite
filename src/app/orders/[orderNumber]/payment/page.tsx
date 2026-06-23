@@ -170,9 +170,11 @@ export default function PaymentPage() {
           <div style={{ fontSize: '.88rem', fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>
             💳 วิธีชำระผ่านบัตรเครดิต
           </div>
-          <div style={{ fontSize: '.76rem', color: '#92610a', background: '#fff3cd', border: '1px solid #ffe08a', borderRadius: 'var(--r)', padding: '8px 12px', marginBottom: 14, lineHeight: 1.5 }}>
-            ⚠️ รับชำระด้วยบัตรเครดิตได้<strong>ไม่เกิน ฿{CARD_MAX_TOTAL.toLocaleString()}</strong>
-          </div>
+          {Number.isFinite(CARD_MAX_TOTAL) && (
+            <div style={{ fontSize: '.76rem', color: '#92610a', background: '#fff3cd', border: '1px solid #ffe08a', borderRadius: 'var(--r)', padding: '8px 12px', marginBottom: 14, lineHeight: 1.5 }}>
+              ⚠️ รับชำระด้วยบัตรเครดิตได้<strong>ไม่เกิน ฿{CARD_MAX_TOTAL.toLocaleString()}</strong>
+            </div>
+          )}
           <ol style={{ margin: 0, paddingLeft: 18, fontSize: '.84rem', color: 'var(--ink-2)', lineHeight: 1.9 }}>
             <li>กดปุ่ม <strong>&ldquo;ทักเพจรับลิงก์&rdquo;</strong> ด้านล่าง</li>
             <li>แจ้ง<strong>เลขคำสั่งซื้อ {orderNumber}</strong> กับแอดมิน</li>
