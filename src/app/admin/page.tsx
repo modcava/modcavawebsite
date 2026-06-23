@@ -1,11 +1,14 @@
 import { prisma } from '@/lib/prisma'
 import { formatPrice, statusColor } from '@/lib/utils'
+import { DashboardCharts } from './dashboard-charts'
 
 export const metadata = { title: 'Dashboard' }
 export const dynamic = 'force-dynamic'
 
+const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+
 export default async function AdminDashboard() {
-  const [totalOrders, revenue, totalProducts, totalUsers, recentOrders, byStatus] = await Promise.all([
+  const [totalOrders, revenue, totalProducts, totalUsers, recentOrders, byStatus, orderRows, itemRows, categories] = await Promise.all([
     prisma.order.count(),
     prisma.order.aggregate({ _sum: { total: true }, where: { status: { not: 'CANCELLED' } } }),
     prisma.product.count({ where: { isActive: true } }),
@@ -15,10 +18,55 @@ export default async function AdminDashboard() {
       include: { user: { select: { name: true, email: true } }, items: true },
     }),
     prisma.order.groupBy({ by: ['status'], _count: { status: true } }),
+    // Time-series basis: orders + revenue per month (net of cancellations,
+    // matching the "Total Revenue – Excl. cancelled" card above).
+    prisma.order.findMany({
+      where: { status: { not: 'CANCELLED' } },
+      select: { total: true, createdAt: true },
+    }),
+    // Category basis: line value (price × qty) of every item in a non-cancelled
+    // order, tagged with its product's category and the order month.
+    prisma.orderItem.findMany({
+      where: { order: { status: { not: 'CANCELLED' } } },
+      select: {
+        quantity: true,
+        price: true,
+        product: { select: { categoryId: true } },
+        order: { select: { createdAt: true } },
+      },
+    }),
+    prisma.category.findMany({ select: { id: true, name: true, nameTh: true, emoji: true, slug: true } }),
   ])
 
   const totalRevenue = revenue._sum.total?.toNumber() ?? 0
   const statusMap = Object.fromEntries(byStatus.map((o) => [o.status, o._count.status]))
+
+  // ── Aggregate orders → per-month { orders, revenue } ────────
+  const monthlyMap = new Map<string, { orders: number; revenue: number }>()
+  for (const o of orderRows) {
+    const key = ym(o.createdAt)
+    const cur = monthlyMap.get(key) ?? { orders: 0, revenue: 0 }
+    cur.orders += 1
+    cur.revenue += Number(o.total)
+    monthlyMap.set(key, cur)
+  }
+  const monthly = Array.from(monthlyMap.entries())
+    .map(([key, v]) => ({ ym: key, year: +key.slice(0, 4), month: +key.slice(5, 7), orders: v.orders, revenue: v.revenue }))
+    .sort((a, b) => a.ym.localeCompare(b.ym))
+
+  // ── Aggregate items → compact (month × category) matrix ─────
+  const catMap = new Map<string, { revenue: number; qty: number }>()
+  for (const it of itemRows) {
+    const key = `${ym(it.order.createdAt)}|${it.product.categoryId}`
+    const cur = catMap.get(key) ?? { revenue: 0, qty: 0 }
+    cur.revenue += Number(it.price) * it.quantity
+    cur.qty += it.quantity
+    catMap.set(key, cur)
+  }
+  const categoryMatrix = Array.from(catMap.entries()).map(([key, v]) => {
+    const [m, categoryId] = key.split('|')
+    return { ym: m, categoryId, revenue: v.revenue, qty: v.qty }
+  })
 
   const STATS = [
     { label: 'Total Revenue',  value: formatPrice(totalRevenue), sub: 'Excl. cancelled' },
@@ -88,6 +136,9 @@ export default async function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Sales analytics — monthly/yearly breakdown + category pie */}
+      <DashboardCharts monthly={monthly} categoryMatrix={categoryMatrix} categories={categories} />
     </div>
   )
 }
