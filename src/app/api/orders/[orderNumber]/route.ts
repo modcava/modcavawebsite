@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { CARD_SURCHARGE_RATE, CARD_MAX_TOTAL } from '@/lib/payment'
 
 // GET /api/orders/[orderNumber] — single order for its owner (or any admin).
 // Used by the payment page to branch the UI by payment method.
@@ -44,8 +45,7 @@ export async function GET(
 // PATCH /api/orders/[orderNumber] — let the owner switch payment method while
 // the order is still unpaid (PENDING). Recomputes the credit-card surcharge and
 // total from the stored base (total − surcharge), so no need to touch
-// coupons/points/stock. Keep CARD_SURCHARGE_RATE in sync with src/app/api/orders/route.ts.
-const CARD_SURCHARGE_RATE = 0.05
+// coupons/points/stock.
 const ALLOWED_METHODS = ['PromptPay', 'Credit Card']
 
 export async function PATCH(
@@ -77,6 +77,15 @@ export async function PATCH(
   const base = Number(order.total) - Number(order.surcharge)
   const surcharge = method === 'Credit Card' ? Math.round(base * CARD_SURCHARGE_RATE * 100) / 100 : 0
   const total = Math.round((base + surcharge) * 100) / 100
+
+  // Hard ceiling on credit-card orders (manual payment-link flow): can't switch
+  // to card if the resulting charge (incl. surcharge) would exceed CARD_MAX_TOTAL.
+  if (method === 'Credit Card' && total > CARD_MAX_TOTAL) {
+    return NextResponse.json(
+      { error: `รับชำระด้วยบัตรเครดิตได้ไม่เกิน ฿${CARD_MAX_TOTAL.toLocaleString()} (ยอดออเดอร์ ฿${total.toLocaleString()})` },
+      { status: 400 },
+    )
+  }
 
   // Atomic guard: only update if still PENDING (race with admin confirming).
   const upd = await prisma.order.updateMany({

@@ -7,13 +7,12 @@ import { enforceRateLimit } from '@/lib/rate-limit'
 import { generateOrderNumber } from '@/lib/utils'
 import { spendPoints } from '@/lib/points'
 import { parseCategoryIds, eligibleSubtotal } from '@/lib/coupon'
+import { CARD_SURCHARGE_RATE, CARD_MAX_TOTAL } from '@/lib/payment'
 
 const SHIPPING_FEES: Record<string, number> = { 'Store Pickup': 0, EMS: 50, Flash: 45, SPX: 40 }
 const DEFAULT_SHIPPING_FEE = 60
 // Free shipping once the post-discount product total (after coupon + points) reaches this amount.
 const FREE_SHIPPING_THRESHOLD = 1000
-// Surcharge added when paying by credit card (manual "DM the page for a link" flow).
-const CARD_SURCHARGE_RATE = 0.05
 
 // Validation errors thrown inside the transaction → caught and returned as 400
 class OrderError extends Error {
@@ -184,6 +183,16 @@ export async function POST(req: NextRequest) {
     : 0
   const grandTotal = payableBeforeCard + cardSurcharge
   const pointsEarned = Math.floor(payableBeforeCard / 100)
+
+  // Hard ceiling on credit-card orders (manual payment-link flow): the amount
+  // actually charged to the card — grandTotal, incl. surcharge — cannot exceed
+  // CARD_MAX_TOTAL. Checked here so we fast-fail before opening the tx.
+  if (shipping.paymentMethod === 'Credit Card' && grandTotal > CARD_MAX_TOTAL) {
+    return NextResponse.json(
+      { error: `รับชำระด้วยบัตรเครดิตได้ไม่เกิน ฿${CARD_MAX_TOTAL.toLocaleString()} (ยอดของคุณ ฿${grandTotal.toLocaleString()}) กรุณาเลือกโอนเงิน / PromptPay` },
+      { status: 400 },
+    )
+  }
 
   // ──────────────────────────────────────────────────────────────
   // TRANSACTION (re-verify atomically + commit mutations together)

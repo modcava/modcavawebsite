@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { CARD_MAX_TOTAL } from '@/lib/payment'
 
 // Facebook page for the manual credit-card payment-link flow.
 const MESSENGER_URL = 'https://m.me/Modcavashop'
@@ -169,6 +170,9 @@ export default function PaymentPage() {
           <div style={{ fontSize: '.88rem', fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>
             💳 วิธีชำระผ่านบัตรเครดิต
           </div>
+          <div style={{ fontSize: '.76rem', color: '#92610a', background: '#fff3cd', border: '1px solid #ffe08a', borderRadius: 'var(--r)', padding: '8px 12px', marginBottom: 14, lineHeight: 1.5 }}>
+            ⚠️ รับชำระด้วยบัตรเครดิตได้<strong>ไม่เกิน ฿{CARD_MAX_TOTAL.toLocaleString()}</strong>
+          </div>
           <ol style={{ margin: 0, paddingLeft: 18, fontSize: '.84rem', color: 'var(--ink-2)', lineHeight: 1.9 }}>
             <li>กดปุ่ม <strong>&ldquo;ทักเพจรับลิงก์&rdquo;</strong> ด้านล่าง</li>
             <li>แจ้ง<strong>เลขคำสั่งซื้อ {orderNumber}</strong> กับแอดมิน</li>
@@ -209,6 +213,12 @@ export default function PaymentPage() {
       </div>
     )
   }
+
+  // Gate "switch to credit card" by the amount that would be charged (base + 5%).
+  // base = current payable minus any existing surcharge (PromptPay → surcharge 0).
+  const ccBase = order ? order.total - order.surcharge : 0
+  const ccProjectedTotal = ccBase + Math.round(ccBase * 0.05 * 100) / 100
+  const cardAllowed = ccProjectedTotal <= CARD_MAX_TOTAL
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 20px 80px' }}>
@@ -282,16 +292,22 @@ export default function PaymentPage() {
       <div style={{ textAlign: 'center', marginBottom: 20 }}>
         <button
           onClick={() => changeMethod('Credit Card')}
-          disabled={switching}
+          disabled={switching || !cardAllowed}
           style={{
             padding: '9px 16px', fontSize: '.8rem', fontWeight: 600,
             background: 'transparent', color: 'var(--ink-2)',
             border: '1px solid var(--divider)', borderRadius: 'var(--r)',
-            cursor: switching ? 'wait' : 'pointer', opacity: switching ? .6 : 1,
+            cursor: switching ? 'wait' : (!cardAllowed ? 'not-allowed' : 'pointer'),
+            opacity: (switching || !cardAllowed) ? .6 : 1,
           }}
         >
           💳 ต้องการชำระด้วยบัตรเครดิต? (+5%)
         </button>
+        {!cardAllowed && (
+          <p style={{ fontSize: '.72rem', color: '#92610a', marginTop: 8, lineHeight: 1.5 }}>
+            ⚠️ รับชำระด้วยบัตรเครดิตได้ไม่เกิน ฿{CARD_MAX_TOTAL.toLocaleString()} (ยอดนี้เกินกำหนด)
+          </p>
+        )}
       </div>
 
       {/* Upload slip */}

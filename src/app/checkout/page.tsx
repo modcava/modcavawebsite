@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { useCart } from '@/store/cart'
+import { CARD_MAX_TOTAL } from '@/lib/payment'
 import Link from 'next/link'
 
 type SavedAddress = {
@@ -287,6 +288,13 @@ export default function CheckoutPage() {
   }
 
   async function onSubmit(data: Form) {
+    // Safety net for the card ceiling: the option is disabled when over the limit,
+    // but re-check here in case the cart changed after card was selected.
+    if (payment === 'Credit Card' && grandTotal > CARD_MAX_TOTAL) {
+      toast.error(`รับชำระด้วยบัตรเครดิตได้ไม่เกิน ฿${CARD_MAX_TOTAL.toLocaleString()} (ยอดของคุณ ฿${grandTotal.toLocaleString()}) กรุณาเลือกโอนเงิน / PromptPay`)
+      setPayment('PromptPay')
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch('/api/orders', {
@@ -356,6 +364,10 @@ export default function CheckoutPage() {
   const cardSurcharge = payment === 'Credit Card' ? Math.round(payableBeforeCard * 0.05 * 100) / 100 : 0
   const grandTotal = payableBeforeCard + cardSurcharge
   const pointsToEarn = Math.floor(payableBeforeCard / 100)
+  // Credit card has a hard ceiling (manual payment-link flow). Gate the option by
+  // the amount that WOULD be charged if paying by card (payable + 5%). Server re-checks.
+  const projectedCardTotal = payableBeforeCard + Math.round(payableBeforeCard * 0.05 * 100) / 100
+  const cardAllowed = projectedCardTotal <= CARD_MAX_TOTAL
   // How much more (after discounts) the customer needs to spend to unlock free shipping
   const freeShipRemaining = Math.max(0, FREE_SHIPPING_THRESHOLD - netAfterDiscounts)
 
@@ -487,18 +499,29 @@ export default function CheckoutPage() {
               {[
                 { id: 'PromptPay',   label: '🏦 โอน / PromptPay', note: 'ไม่มีค่าบริการ' },
                 { id: 'Credit Card', label: '💳 บัตรเครดิต',       note: '+5% ค่าบริการ' },
-              ].map(({ id, label, note }) => (
-                <button key={id} type="button" onClick={() => setPayment(id)} style={{
-                  ...S.radioCard(payment === id),
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  padding: '12px 8px', gap: 4,
-                }}>
-                  <span style={{ fontSize: '.84rem' }}>{label}</span>
-                  <span style={{ fontSize: '.72rem', opacity: .8 }}>{note}</span>
-                </button>
-              ))}
+              ].map(({ id, label, note }) => {
+                const disabled = id === 'Credit Card' && !cardAllowed
+                return (
+                  <button key={id} type="button" disabled={disabled}
+                    onClick={() => { if (!disabled) setPayment(id) }} style={{
+                    ...S.radioCard(payment === id),
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    padding: '12px 8px', gap: 4,
+                    opacity: disabled ? .45 : 1,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                  }}>
+                    <span style={{ fontSize: '.84rem' }}>{label}</span>
+                    <span style={{ fontSize: '.72rem', opacity: .8 }}>{disabled ? `เกิน ฿${CARD_MAX_TOTAL.toLocaleString()}` : note}</span>
+                  </button>
+                )
+              })}
             </div>
-            {payment === 'Credit Card' && (
+            {!cardAllowed && (
+              <p style={{ fontSize: '.74rem', color: '#92610a', background: '#fff3cd', border: '1px solid #ffe08a', borderRadius: 'var(--r)', padding: '8px 12px', marginTop: 12, lineHeight: 1.5 }}>
+                ⚠️ รับชำระด้วยบัตรเครดิตได้<strong>ไม่เกิน ฿{CARD_MAX_TOTAL.toLocaleString()}</strong> — ยอดของคุณเกินกำหนด กรุณาเลือกโอนเงิน / PromptPay
+              </p>
+            )}
+            {payment === 'Credit Card' && cardAllowed && (
               <p style={{ fontSize: '.74rem', color: '#92610a', background: '#fff3cd', border: '1px solid #ffe08a', borderRadius: 'var(--r)', padding: '8px 12px', marginTop: 12, lineHeight: 1.5 }}>
                 💬 หลังสั่งซื้อ กรุณา<strong>ทักเพจ</strong>เพื่อรับลิงก์ชำระผ่านบัตรเครดิต (มีค่าบริการ +5% รวมในยอดแล้ว)
               </p>
