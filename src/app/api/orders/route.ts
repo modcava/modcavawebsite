@@ -8,6 +8,7 @@ import { generateOrderNumber } from '@/lib/utils'
 import { spendPoints } from '@/lib/points'
 import { parseCategoryIds, eligibleSubtotal } from '@/lib/coupon'
 import { CARD_SURCHARGE_RATE, CARD_MAX_TOTAL } from '@/lib/payment'
+import { sendOrderNotification } from '@/lib/discord'
 
 const SHIPPING_FEES: Record<string, number> = { 'Store Pickup': 0, EMS: 50, Flash: 45, SPX: 40 }
 const DEFAULT_SHIPPING_FEE = 60
@@ -331,6 +332,9 @@ export async function POST(req: NextRequest) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
     return NextResponse.json({ error: `สั่งซื้อไม่สำเร็จ: ${msg}` }, { status: 500 })
   }
+
+  // Fire-and-forget — ไม่ block response ถ้า Discord ช้าหรือล่ม
+  sendOrderNotification(order).catch(() => {})
 
   return NextResponse.json({ data: order }, { status: 201 })
 }
