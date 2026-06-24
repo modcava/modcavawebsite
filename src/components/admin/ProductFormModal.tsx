@@ -203,9 +203,16 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
   }, [categories, categoryId, product])
   const section = sectionForSlug(currentSlug)
 
-  // Auto-set condition to SEALED for sealed categories
+  // Auto-set condition to SEALED for sealed / non-single product categories
+  // (MTG Sealed, Riftbound Sealed, Paints, Model Tools / Airbrush, Card Accessories)
   useEffect(() => {
-    if (section === 'mtg-sealed' || section === 'rb-sealed') {
+    if (
+      section === 'mtg-sealed' ||
+      section === 'rb-sealed' ||
+      section === 'paint' ||
+      section === 'airbrush' ||
+      section === 'card-acc'
+    ) {
       setValue('condition', 'SEALED')
     }
   }, [section, setValue])
