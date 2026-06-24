@@ -35,7 +35,7 @@ echo "==> [4/5] build  (heap 3GB กัน OOM บน RAM 2GB)"
 NODE_OPTIONS="--max-old-space-size=3072" npm run build
 
 echo "==> [5/5] restart pm2"
-pm2 restart mocava
+pm2 restart mocava --update-env
 
 echo ""
 pm2 status
