@@ -32,25 +32,29 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://modcava.com'
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
-  title: { template: '%s | Modcava', default: 'Modcava — ร้านการ์ด MTG Riftbound และอุปกรณ์ทาสีโมเดล' },
-  description: 'ร้านขายการ์ด MTG, Riftbound, การ์ด TCG, สินค้า Sealed และอุปกรณ์ทาสีโมเดล Citadel, Vallejo ในขอนแก่น สั่งออนไลน์ได้ทั่วประเทศ',
+  title: { template: '%s | Modcava', default: 'Modcava — การ์ด MTG, Riftbound, แอร์บรัช & พู่กันทาสีโมเดล' },
+  description: 'ร้านขายการ์ด MTG, Riftbound และอุปกรณ์ทาสีโมเดลพรีเมียม — แอร์บรัช Harder & Steenbeck รุ่น Infinity, พู่กัน Rosemary & Co และ Artis Opus, สี Citadel, Vallejo ในขอนแก่น สั่งออนไลน์ทั่วประเทศ',
   keywords: [
+    // แบรนด์ที่ต้องการเน้น (พรีเมียม) — วางไว้ต้น ๆ
+    'Harder & Steenbeck', 'Airbrush Infinity', 'Infinity airbrush', 'แอร์บรัช Harder & Steenbeck',
+    'Rosemary & Co', 'Artis Opus', 'พู่กัน Kolinsky', 'พู่กันทาสีโมเดล',
+    'แอร์บรัช', 'airbrush', 'อุปกรณ์ทาสีโมเดล', 'ทาสีโมเดล',
+    // หมวดเดิม
     'MTG', 'Magic the Gathering', 'Riftbound', 'TCG', 'การ์ด MTG', 'ซื้อการ์ด MTG',
-    'ร้านการ์ด', 'ร้านการ์ดขอนแก่น', 'สี Citadel', 'สี Vallejo', 'ทาสีโมเดล',
-    'single card', 'sealed MTG', 'อุปกรณ์ทาสี', 'โมเดล', 'Warhammer',
+    'ร้านการ์ด', 'ร้านการ์ดขอนแก่น', 'สี Citadel', 'สี Vallejo', 'Warhammer',
   ],
   openGraph: {
     type: 'website',
     url: APP_URL,
     siteName: 'Modcava',
-    title: 'Modcava — ร้านการ์ด MTG Riftbound และอุปกรณ์ทาสีโมเดล',
-    description: 'ร้านขายการ์ด MTG, Riftbound, TCG และอุปกรณ์ทาสีโมเดล Citadel, Vallejo ในขอนแก่น',
+    title: 'Modcava — การ์ด MTG, Riftbound & อุปกรณ์ทาสีโมเดลพรีเมียม',
+    description: 'แอร์บรัช Harder & Steenbeck (Infinity), พู่กัน Rosemary & Co และ Artis Opus, สี Citadel, Vallejo และการ์ด MTG/Riftbound — ร้าน Modcava ขอนแก่น',
     images: [{ url: '/logo.png', width: 512, height: 512, alt: 'Modcava' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Modcava — ร้านการ์ด MTG Riftbound และอุปกรณ์ทาสีโมเดล',
-    description: 'ร้านขายการ์ด MTG, Riftbound, TCG และอุปกรณ์ทาสีโมเดล Citadel, Vallejo ในขอนแก่น',
+    title: 'Modcava — การ์ด MTG, Riftbound & อุปกรณ์ทาสีโมเดลพรีเมียม',
+    description: 'แอร์บรัช Harder & Steenbeck (Infinity), พู่กัน Rosemary & Co และ Artis Opus, สี Citadel, Vallejo และการ์ด MTG/Riftbound — ร้าน Modcava ขอนแก่น',
     images: [{ url: '/logo.png', width: 512, height: 512, alt: 'Modcava' }],
   },
   alternates: { canonical: APP_URL },
@@ -69,7 +73,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           name: 'Modcava',
           url: APP_URL,
           logo: `${APP_URL}/logo.png`,
-          description: 'ร้านขายการ์ด MTG, Riftbound, TCG และอุปกรณ์ทาสีโมเดล Citadel, Vallejo',
+          description: 'ร้านขายการ์ด MTG, Riftbound และอุปกรณ์ทาสีโมเดลพรีเมียม — แอร์บรัช Harder & Steenbeck (Infinity), พู่กัน Rosemary & Co, Artis Opus, สี Citadel, Vallejo',
+          keywords: 'Harder & Steenbeck, Airbrush Infinity, Rosemary & Co, Artis Opus, Citadel, Vallejo, MTG, Riftbound',
+          brand: [
+            { '@type': 'Brand', name: 'Harder & Steenbeck' },
+            { '@type': 'Brand', name: 'Rosemary & Co' },
+            { '@type': 'Brand', name: 'Artis Opus' },
+          ],
           address: { '@type': 'PostalAddress', addressLocality: 'ขอนแก่น', addressCountry: 'TH' },
           sameAs: ['https://www.facebook.com/Modcavashop'],
         })}} />
