@@ -37,10 +37,10 @@ export async function sendOrderNotification(order: OrderPayload) {
     .join('\n')
 
   const fields = [
-    { name: 'ลูกค้า', value: `${order.recipientName}  |  ${order.phone}`, inline: false },
-    { name: 'จังหวัด', value: order.province, inline: true },
-    { name: 'ขนส่ง', value: order.shippingMethod, inline: true },
-    { name: 'ชำระ', value: order.paymentMethod, inline: true },
+    { name: 'ลูกค้า', value: `${order.recipientName ?? '-'}  |  ${order.phone ?? '-'}`, inline: false },
+    { name: 'จังหวัด', value: order.province ?? '-', inline: true },
+    { name: 'ขนส่ง', value: order.shippingMethod ?? '-', inline: true },
+    { name: 'ชำระ', value: order.paymentMethod ?? '-', inline: true },
     { name: 'สินค้า', value: itemLines || '-', inline: false },
   ]
 
@@ -53,7 +53,7 @@ export async function sendOrderNotification(order: OrderPayload) {
     embeds: [
       {
         title: `🛒  ออเดอร์ใหม่  #${order.orderNumber}`,
-        color: 0x22c55e, // green-500
+        color: 0x22c55e,
         fields,
         footer: { text: `ยอดรวม  ฿${total.toLocaleString()}` },
         timestamp: new Date().toISOString(),
@@ -62,13 +62,16 @@ export async function sendOrderNotification(order: OrderPayload) {
   }
 
   try {
-    await fetch(WEBHOOK_URL, {
+    const res = await fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
+    if (!res.ok) {
+      const text = await res.text()
+      console.error(`[discord] webhook rejected ${res.status}:`, text)
+    }
   } catch (err) {
-    // Non-critical — log and continue
     console.error('[discord] sendOrderNotification failed:', err)
   }
 }
