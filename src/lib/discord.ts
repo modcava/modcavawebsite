@@ -8,11 +8,11 @@ type OrderItem = {
 
 type OrderPayload = {
   orderNumber: string
-  recipientName: string
-  phone: string
-  province: string
-  shippingMethod: string
-  paymentMethod: string
+  recipientName: string | null
+  phone: string | null
+  province: string | null
+  shippingMethod: string | null
+  paymentMethod: string | null
   total: number | { toNumber(): number }
   discount: number | { toNumber(): number }
   shippingFee: number | { toNumber(): number }
