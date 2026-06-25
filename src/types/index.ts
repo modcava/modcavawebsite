@@ -74,6 +74,7 @@ export interface CartItem {
   categorySlug: string
   isPreorder: boolean
   depositPercent: number | null
+  payFullPrice: boolean
 }
 
 // ── API Response types ─────────────────────────────────────

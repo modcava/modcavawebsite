@@ -40,12 +40,13 @@ function normalizeCartItem(item: Partial<CartItem>): CartItem {
     alreadyBought:  item.alreadyBought ?? 0,
     isPreorder:     item.isPreorder ?? false,
     depositPercent: item.depositPercent ?? null,
+    payFullPrice:   item.payFullPrice ?? false,
   } as CartItem
 }
 
-// ราคาที่จ่ายจริงต่อหน่วย (มัดจำ % ถ้าเป็น preorder ที่มี depositPercent)
+// ราคาที่จ่ายจริงต่อหน่วย (มัดจำ % ถ้าเป็น preorder ที่มี depositPercent และยังไม่ได้เลือกจ่ายเต็ม)
 function effectiveUnitPrice(item: CartItem): number {
-  if (item.isPreorder && item.depositPercent) {
+  if (item.isPreorder && item.depositPercent && !item.payFullPrice) {
     return Math.round(item.price * item.depositPercent / 100 * 100) / 100
   }
   return item.price
@@ -70,6 +71,7 @@ interface CartStore {
     isPreorder: boolean
     depositPercent: number | null
   }>) => void
+  setPayFullPrice: (id: string, payFull: boolean) => void
   validateLimits: () => void
 }
 
@@ -117,6 +119,11 @@ export const useCart = create<CartStore>()(
       },
 
       clearCart: () => set({ items: [] }),
+
+      setPayFullPrice: (id, payFull) =>
+        set((state) => ({
+          items: state.items.map((i) => i.id === id ? { ...i, payFullPrice: payFull } : i),
+        })),
 
       syncProducts: (updates) => {
         const map = Object.fromEntries(updates.map((u) => [u.id, u]))

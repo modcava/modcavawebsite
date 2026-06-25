@@ -82,6 +82,7 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
       categorySlug: p.category.slug,
       isPreorder:     p.isPreorder ?? false,
       depositPercent: p.depositPercent ?? null,
+      payFullPrice:   false,
     })
     if (qty > 1) {
       const cap = Math.min(p.stock, p.maxPerOrder || Infinity, customerRemaining)

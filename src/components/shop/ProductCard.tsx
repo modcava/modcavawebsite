@@ -65,6 +65,7 @@ export function ProductCard({ product, isWished, onToggleWish, onQuickView, onNo
       categorySlug:   catSlug,
       isPreorder:     product.isPreorder ?? false,
       depositPercent: (product as { depositPercent?: number | null }).depositPercent ?? null,
+      payFullPrice:   false,
     })
   }
 
@@ -226,10 +227,37 @@ export function ProductCard({ product, isWished, onToggleWish, onQuickView, onNo
         {/* Footer */}
         <div style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
           <div>
-            <div style={{ fontFamily: "'Lora', serif", fontSize: '1rem', fontWeight: 600, color: 'var(--sienna)' }}>
-              <span style={{ fontSize: '.72rem', fontFamily: 'Inter, sans-serif', marginRight: 1, opacity: .7 }}>฿</span>
-              {price.toLocaleString()}
-            </div>
+            {/* Deposit badge — แสดงราคามัดจำ + ราคาเต็มขีดฆ่า */}
+            {product.isPreorder && (product as { depositPercent?: number | null }).depositPercent ? (() => {
+              const dep = (product as { depositPercent?: number | null }).depositPercent!
+              const depositPrice = Math.round(price * dep / 100 * 100) / 100
+              return (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <div style={{ fontFamily: "'Lora', serif", fontSize: '1rem', fontWeight: 600, color: '#7c5cff' }}>
+                      <span style={{ fontSize: '.65rem', fontFamily: 'Inter, sans-serif', marginRight: 1, opacity: .8 }}>฿</span>
+                      {depositPrice.toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: '.72rem', color: 'var(--ink-3)', textDecoration: 'line-through' }}>
+                      ฿{price.toLocaleString()}
+                    </div>
+                  </div>
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    marginTop: 3, padding: '2px 7px', borderRadius: 4,
+                    background: '#f3f0ff', border: '1px solid #c4b5fd',
+                    fontSize: '.62rem', fontWeight: 700, color: '#7c5cff',
+                  }}>
+                    💜 มัดจำ {dep}% · จ่ายส่วนที่เหลือเมื่อของมาถึง
+                  </div>
+                </div>
+              )
+            })() : (
+              <div style={{ fontFamily: "'Lora', serif", fontSize: '1rem', fontWeight: 600, color: 'var(--sienna)' }}>
+                <span style={{ fontSize: '.72rem', fontFamily: 'Inter, sans-serif', marginRight: 1, opacity: .7 }}>฿</span>
+                {price.toLocaleString()}
+              </div>
+            )}
             {comingSoon ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 5, marginTop: 4 }}>
                 <div style={{

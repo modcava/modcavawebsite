@@ -26,8 +26,9 @@ class OrderError extends Error {
 // uses DB price (priceMap). If checkout still sends it, Zod strips it silently.
 const checkoutSchema = z.object({
   items: z.array(z.object({
-    productId: z.string(),
-    quantity:  z.number().int().positive(),
+    productId:    z.string(),
+    quantity:     z.number().int().positive(),
+    payFullPrice: z.boolean().default(false),
   })).min(1),
   recipientName:  z.string().min(2),
   phone:          z.string().min(9),
@@ -92,14 +93,15 @@ export async function POST(req: NextRequest) {
 
   // priceMap is the server's source of truth for full prices.
   const priceMap = Object.fromEntries(dbProducts.map((p) => [p.id, Number(p.price)]))
-  // depositPercentMap: % of full price paid now (null = pay full price)
+  // depositPercentMap: % configured on the product (null = no deposit)
   const depositPercentMap = Object.fromEntries(
     dbProducts.map((p) => [p.id, p.isPreorder && p.depositPercent ? p.depositPercent : null])
   )
-  // effectivePriceMap: actual amount charged per unit
+  // effectivePriceMap: actual amount charged per unit (respects payFullPrice per item)
   const effectivePriceMap = Object.fromEntries(
     dbProducts.map((p) => {
-      const dep = depositPercentMap[p.id]
+      const itemReq = items.find((i) => i.productId === p.id)
+      const dep = (!itemReq?.payFullPrice) ? depositPercentMap[p.id] : null
       const full = Number(p.price)
       return [p.id, dep ? Math.round(full * dep / 100 * 100) / 100 : full]
     })
@@ -118,8 +120,9 @@ export async function POST(req: NextRequest) {
   // ── Compute money amounts server-side (no client input) ─────────
   // subtotal = effective amounts (deposit prices for preorder items)
   const subtotal = items.reduce((s, i) => s + effectivePriceMap[i.productId] * i.quantity, 0)
-  // remainingBalance = sum of the parts not paid now (preorder balance)
+  // remainingBalance = sum of the parts not paid now (preorder balance, 0 when payFullPrice)
   const remainingBalance = items.reduce((s, i) => {
+    if (i.payFullPrice) return s
     const dep = depositPercentMap[i.productId]
     if (!dep) return s
     return s + (priceMap[i.productId] - effectivePriceMap[i.productId]) * i.quantity
@@ -338,7 +341,7 @@ export async function POST(req: NextRequest) {
               quantity:      i.quantity,
               price:         effectivePriceMap[i.productId], // deposit-adjusted price, never client
               productName:   nameMap[i.productId] || '',
-              depositPercent: depositPercentMap[i.productId] ?? null,
+              depositPercent: i.payFullPrice ? null : (depositPercentMap[i.productId] ?? null),
             })),
           },
         },

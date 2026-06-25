@@ -307,9 +307,9 @@ export default function CheckoutPage() {
           couponCode: couponResult ? couponCode.trim() : undefined,
           pointsToUse: pointsToUse,
           items: items.map((i) => ({
-            productId: i.id,
-            quantity:  i.quantity,
-            price:     i.price,
+            productId:    i.id,
+            quantity:     i.quantity,
+            payFullPrice: i.payFullPrice ?? false,
           })),
         }),
       })

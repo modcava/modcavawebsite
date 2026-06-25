@@ -94,6 +94,7 @@ export function QuickViewModal({ product, isWished, onToggleWish, onNotify, onCl
       categorySlug:   catSlug,
       isPreorder:     product.isPreorder ?? false,
       depositPercent: (product as { depositPercent?: number | null }).depositPercent ?? null,
+      payFullPrice:   false,
     })
     onClose()
   }

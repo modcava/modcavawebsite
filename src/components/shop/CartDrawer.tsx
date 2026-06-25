@@ -8,8 +8,9 @@ interface Props {
 }
 
 export function CartDrawer({ open, onClose }: Props) {
-  const { items, removeItem, updateQty, clearCart, total } = useCart()
+  const { items, removeItem, updateQty, clearCart, total, remainingTotal, setPayFullPrice } = useCart()
   const totalVal = total()
+  const remainingVal = remainingTotal()
   const router = useRouter()
 
   function goCheckout() {
@@ -114,6 +115,42 @@ export function CartDrawer({ open, onClose }: Props) {
                         : `จำกัด ${item.maxPerCustomer} ชิ้น/ลูกค้า`}
                     </div>
                   )}
+                  {/* Deposit toggle — แสดงเฉพาะ preorder ที่มี depositPercent */}
+                  {item.isPreorder && item.depositPercent && (() => {
+                    const depositPrice = Math.round(item.price * item.depositPercent / 100 * 100) / 100
+                    return (
+                      <div style={{ marginTop: 5, display: 'flex', gap: 4 }}>
+                        <button
+                          onClick={() => setPayFullPrice(item.id, false)}
+                          style={{
+                            flex: 1, padding: '3px 0', fontSize: '.62rem', fontWeight: 700,
+                            borderRadius: 4, border: '1.5px solid',
+                            cursor: 'pointer', transition: 'all .15s',
+                            borderColor: !item.payFullPrice ? '#7c5cff' : 'var(--divider)',
+                            background: !item.payFullPrice ? '#f3f0ff' : 'none',
+                            color: !item.payFullPrice ? '#7c5cff' : 'var(--ink-3)',
+                          }}
+                        >
+                          มัดจำ {item.depositPercent}%<br />
+                          <span style={{ fontFamily: "'Lora', serif", fontSize: '.72rem' }}>฿{depositPrice.toLocaleString()}</span>
+                        </button>
+                        <button
+                          onClick={() => setPayFullPrice(item.id, true)}
+                          style={{
+                            flex: 1, padding: '3px 0', fontSize: '.62rem', fontWeight: 700,
+                            borderRadius: 4, border: '1.5px solid',
+                            cursor: 'pointer', transition: 'all .15s',
+                            borderColor: item.payFullPrice ? 'var(--sienna)' : 'var(--divider)',
+                            background: item.payFullPrice ? 'var(--sienna-bg)' : 'none',
+                            color: item.payFullPrice ? 'var(--sienna)' : 'var(--ink-3)',
+                          }}
+                        >
+                          จ่ายเต็มราคา<br />
+                          <span style={{ fontFamily: "'Lora', serif", fontSize: '.72rem' }}>฿{item.price.toLocaleString()}</span>
+                        </button>
+                      </div>
+                    )
+                  })()}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
                     {/* Qty stepper */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 0, border: '1px solid var(--divider)', borderRadius: 'var(--r)', overflow: 'hidden' }}>
@@ -145,10 +182,21 @@ export function CartDrawer({ open, onClose }: Props) {
                         title={atCap ? capTitle : 'เพิ่มจำนวน'}
                       >+</button>
                     </div>
-                    {/* Line total */}
-                    <div style={{ fontFamily: "'Lora', serif", fontSize: '.9rem', fontWeight: 600, color: 'var(--sienna)' }}>
-                      ฿{(item.price * item.quantity).toLocaleString()}
-                    </div>
+                    {/* Line total — ใช้ราคา effective (มัดจำ หรือ เต็ม) */}
+                    {item.isPreorder && item.depositPercent && !item.payFullPrice ? (
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontFamily: "'Lora', serif", fontSize: '.9rem', fontWeight: 600, color: '#7c5cff' }}>
+                          ฿{(Math.round(item.price * item.depositPercent / 100 * 100) / 100 * item.quantity).toLocaleString()}
+                        </div>
+                        <div style={{ fontSize: '.62rem', color: 'var(--ink-3)', textDecoration: 'line-through' }}>
+                          ฿{(item.price * item.quantity).toLocaleString()}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontFamily: "'Lora', serif", fontSize: '.9rem', fontWeight: 600, color: 'var(--sienna)' }}>
+                        ฿{(item.price * item.quantity).toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button onClick={() => removeItem(item.id)} style={{ color: 'var(--ink-3)', fontSize: '.85rem', transition: 'color .18s', alignSelf: 'flex-start', padding: 2, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -163,14 +211,22 @@ export function CartDrawer({ open, onClose }: Props) {
         {/* Footer */}
         {items.length > 0 && (
           <div style={{ padding: '16px 20px', borderTop: '1px solid var(--divider)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: remainingVal > 0 ? 6 : 12 }}>
               <span style={{ fontSize: '.85rem', color: 'var(--ink-2)' }}>
-                <span className="en-text">Total</span><span className="th-text">ยอดรวม</span>
+                {remainingVal > 0 ? 'ยอดชำระตอนนี้' : <><span className="en-text">Total</span><span className="th-text">ยอดรวม</span></>}
               </span>
               <span style={{ fontFamily: "'Lora', serif", fontSize: '1.3rem', fontWeight: 600, color: 'var(--sienna)' }}>
                 ฿{totalVal.toLocaleString()}
               </span>
             </div>
+            {remainingVal > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '6px 10px', borderRadius: 'var(--r)', background: '#f3f0ff', border: '1px solid #c4b5fd' }}>
+                <span style={{ fontSize: '.75rem', color: '#7c5cff', fontWeight: 600 }}>💜 ค้างชำระเมื่อของมาถึง</span>
+                <span style={{ fontFamily: "'Lora', serif", fontSize: '.9rem', fontWeight: 600, color: '#7c5cff' }}>
+                  ฿{remainingVal.toLocaleString()}
+                </span>
+              </div>
+            )}
             <button onClick={goCheckout} style={{
               display: 'block', width: '100%', padding: 12, background: 'var(--ink)', color: 'var(--paper)',
               borderRadius: 'var(--r)', fontWeight: 600, fontSize: '.88rem',

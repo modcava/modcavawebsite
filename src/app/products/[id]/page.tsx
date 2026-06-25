@@ -293,6 +293,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
                 releaseAt:      product.releaseAt ? product.releaseAt.toISOString() : null,
                 isPreorder:     product.isPreorder ?? false,
                 depositPercent: product.depositPercent ?? null,
+                payFullPrice:   false,
               }}
             />
 
