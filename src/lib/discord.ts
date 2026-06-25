@@ -1,4 +1,5 @@
 const WEBHOOK_URL = process.env.DISCORD_ORDER_WEBHOOK_URL
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL
 
 type OrderItem = {
   productName: string
@@ -73,5 +74,57 @@ export async function sendOrderNotification(order: OrderPayload) {
     }
   } catch (err) {
     console.error('[discord] sendOrderNotification failed:', err)
+  }
+}
+
+type SlipPayload = {
+  orderNumber: string
+  recipientName: string | null
+  phone: string | null
+  total: number | { toNumber(): number }
+}
+
+// แจ้งเตือน admin เมื่อลูกค้าอัปโหลดสลิปยืนยันการชำระเงิน — ใช้ webhook ช่องเดียวกับออเดอร์ใหม่
+export async function sendSlipNotification(slip: SlipPayload) {
+  if (!WEBHOOK_URL) return
+
+  const toNum = (v: number | { toNumber(): number }) =>
+    typeof v === 'object' ? v.toNumber() : Number(v)
+
+  const total = toNum(slip.total)
+
+  const fields = [
+    { name: 'ลูกค้า', value: `${slip.recipientName ?? '-'}  |  ${slip.phone ?? '-'}`, inline: false },
+    { name: 'ยอดที่ต้องตรวจ', value: `฿${total.toLocaleString()}`, inline: true },
+  ]
+
+  if (APP_URL) {
+    fields.push({ name: 'ตรวจสลิป', value: `[เปิดหน้าจัดการออเดอร์](${APP_URL}/admin/orders)`, inline: false })
+  }
+
+  const payload = {
+    embeds: [
+      {
+        title: `📸  ลูกค้าส่งสลิปแล้ว  #${slip.orderNumber}`,
+        description: 'รอแอดมินตรวจสอบและยืนยันการชำระเงิน',
+        color: 0xf59e0b, // amber — รอตรวจสอบ
+        fields,
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  }
+
+  try {
+    const res = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      console.error(`[discord] slip webhook rejected ${res.status}:`, text)
+    }
+  } catch (err) {
+    console.error('[discord] sendSlipNotification failed:', err)
   }
 }

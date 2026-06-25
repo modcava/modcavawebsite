@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { SLIPS_DIR, slipUrlFor } from '@/lib/slips'
+import { sendSlipNotification } from '@/lib/discord'
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
   // ตรวจสอบว่า order เป็นของ user นี้
   const order = await prisma.order.findFirst({
     where: { orderNumber, userId: session.user.id },
-    select: { id: true, status: true },
+    select: { id: true, status: true, recipientName: true, phone: true, total: true },
   })
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
@@ -60,6 +61,14 @@ export async function POST(req: Request) {
     where: { id: order.id },
     data: { slipUrl },
   })
+
+  // แจ้งเตือน admin ใน Discord — fire-and-forget ไม่ block response ถ้า Discord ช้าหรือล่ม
+  sendSlipNotification({
+    orderNumber,
+    recipientName: order.recipientName,
+    phone: order.phone,
+    total: order.total,
+  }).catch(() => {})
 
   return NextResponse.json({ slipUrl })
 }
