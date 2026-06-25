@@ -38,7 +38,17 @@ function normalizeCartItem(item: Partial<CartItem>): CartItem {
     maxPerOrder:    item.maxPerOrder ?? null,
     maxPerCustomer: item.maxPerCustomer ?? null,
     alreadyBought:  item.alreadyBought ?? 0,
+    isPreorder:     item.isPreorder ?? false,
+    depositPercent: item.depositPercent ?? null,
   } as CartItem
+}
+
+// ราคาที่จ่ายจริงต่อหน่วย (มัดจำ % ถ้าเป็น preorder ที่มี depositPercent)
+function effectiveUnitPrice(item: CartItem): number {
+  if (item.isPreorder && item.depositPercent) {
+    return Math.round(item.price * item.depositPercent / 100 * 100) / 100
+  }
+  return item.price
 }
 
 interface CartStore {
@@ -48,6 +58,8 @@ interface CartStore {
   updateQty: (id: string, qty: number) => void
   clearCart: () => void
   total: () => number
+  depositTotal: () => number        // ยอดที่จ่ายจริง (มัดจำสำหรับ preorder)
+  remainingTotal: () => number      // ยอดค้างชำระ (ส่วนที่ยังไม่จ่าย)
   count: () => number
   syncProducts: (updates: Array<{
     id: string
@@ -55,6 +67,8 @@ interface CartStore {
     maxPerOrder: number | null
     maxPerCustomer: number | null
     alreadyBought: number
+    isPreorder: boolean
+    depositPercent: number | null
   }>) => void
   validateLimits: () => void
 }
@@ -116,6 +130,8 @@ export const useCart = create<CartStore>()(
               maxPerOrder: u.maxPerOrder,
               maxPerCustomer: u.maxPerCustomer,
               alreadyBought: u.alreadyBought,
+              isPreorder: u.isPreorder,
+              depositPercent: u.depositPercent,
             }
           }),
         }))
@@ -142,14 +158,23 @@ export const useCart = create<CartStore>()(
       },
 
       total: () =>
-        get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+        get().items.reduce((sum, i) => sum + effectiveUnitPrice(i) * i.quantity, 0),
+
+      depositTotal: () =>
+        get().items.reduce((sum, i) => sum + effectiveUnitPrice(i) * i.quantity, 0),
+
+      remainingTotal: () =>
+        get().items.reduce((sum, i) => {
+          if (!i.isPreorder || !i.depositPercent) return sum
+          return sum + (i.price - effectiveUnitPrice(i)) * i.quantity
+        }, 0),
 
       count: () =>
         get().items.reduce((sum, i) => sum + i.quantity, 0),
     }),
     {
       name: 'modcava-cart',
-      version: 2,
+      version: 3,
       skipHydration: true,
       // Backfill fields เมื่อ schema เปลี่ยน — กัน undefined ใน effectiveCap()
       // ทำงานเมื่อ rehydrate จาก modcava-cart key (รวมทั้งกรณี per-user snapshot restore

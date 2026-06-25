@@ -46,6 +46,8 @@ export type ProductWithCategory = Product & {
   // Purchase limits
   maxPerOrder?:     number | null
   maxPerCustomer?:  number | null
+  // Preorder deposit
+  depositPercent?:  number | null
 }
 
 // ── Order with relations ───────────────────────────────────
@@ -70,6 +72,8 @@ export interface CartItem {
   emoji: string | null
   imageUrl: string | null
   categorySlug: string
+  isPreorder: boolean
+  depositPercent: number | null
 }
 
 // ── API Response types ─────────────────────────────────────

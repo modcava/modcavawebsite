@@ -65,6 +65,8 @@ const schema = z.object({
   // Purchase limits
   maxPerOrder:    z.union([z.coerce.number().int().nonnegative(), z.literal('')]).optional(),
   maxPerCustomer: z.union([z.coerce.number().int().nonnegative(), z.literal('')]).optional(),
+  // Preorder deposit (1–100 %)
+  depositPercent: z.union([z.coerce.number().int().min(1).max(100), z.literal('')]).optional(),
   // Scheduled release (datetime-local string; '' = available now)
   releaseAt:      z.string().optional(),
 })
@@ -180,6 +182,7 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
       compatibleWith:  product.compatibleWith || '',
       maxPerOrder:     product.maxPerOrder ?? '',
       maxPerCustomer:  product.maxPerCustomer ?? '',
+      depositPercent:  product.depositPercent ?? '',
       releaseAt:       toLocalInput(product.releaseAt),
     } : {
       condition: 'NM', isNew: false, isActive: true, isPreorder: false, stock: 0, language: 'EN',
@@ -194,7 +197,8 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
     }
   }, [categories, product, setValue])
 
-  const categoryId = watch('categoryId')
+  const categoryId  = watch('categoryId')
+  const isPreorder  = watch('isPreorder')
   const currentSlug = useMemo(() => {
     // For an existing product whose category hasn't changed, use the slug we already have
     // so the section shows instantly without waiting for the categories API response.
@@ -526,6 +530,22 @@ export function ProductFormModal({ product, onClose, onSaved }: Props) {
               <Toggle reg={register('isActive')} label="Active (visible in shop)" />
               <Toggle reg={register('isPreorder')} label="Pre-order (ซื้อได้ก่อน · ส่งเมื่อของเข้า)" />
             </div>
+            {isPreorder && (
+              <Field label="มัดจำ (% ที่จ่ายก่อน)" span={2}>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    placeholder="เช่น 30"
+                    {...register('depositPercent')}
+                    className="input w-32"
+                  />
+                  <span className="text-xs text-warm-400">%  (เว้นว่าง = จ่ายเต็มราคา)</span>
+                </div>
+                <Hint text="ตั้งค่า % มัดจำสำหรับ pre-order เช่น 30 = ลูกค้าจ่าย 30% ตอนสั่ง แล้วจ่ายส่วนที่เหลือเมื่อของมาถึง" />
+              </Field>
+            )}
           </Group>
 
           {/* ── Footer buttons ─────────────────────────────── */}

@@ -22,6 +22,8 @@ export interface ProductActionsProduct {
   maxPerOrder: number | null
   maxPerCustomer: number | null
   releaseAt: string | null
+  isPreorder: boolean
+  depositPercent: number | null
 }
 
 const WISHLIST_KEY = 'modcava_wishlist'
@@ -74,6 +76,8 @@ export function ProductActions({ product }: { product: ProductActionsProduct }) 
       emoji:          product.emoji,
       imageUrl:       product.imageUrl,
       categorySlug:   product.categorySlug,
+      isPreorder:     product.isPreorder,
+      depositPercent: product.depositPercent,
     })
     // addItem always inserts a new item at qty 1; set the chosen quantity
     // explicitly (mirrors AccountShell's add-with-quantity flow).

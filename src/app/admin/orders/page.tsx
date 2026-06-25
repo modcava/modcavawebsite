@@ -18,6 +18,7 @@ interface OrderDetail {
   total: number | string
   discount: number | string
   shippingFee: number | string
+  remainingBalance?: number | string | null
   recipientName?: string | null
   address?: string | null
   district?: string | null
@@ -30,6 +31,7 @@ interface OrderDetail {
     productName: string
     quantity: number
     price: number | string
+    depositPercent?: number | null
     product?: { emoji?: string | null } | null
   }[]
 }
@@ -152,6 +154,11 @@ function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () =
                         <td className="px-4 py-2.5 text-[#c8d4e8]">
                           {item.product?.emoji && <span className="mr-1.5">{item.product.emoji}</span>}
                           {item.productName}
+                          {item.depositPercent != null && (
+                            <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: '#3b2e6e', color: '#b09fff' }}>
+                              มัดจำ {item.depositPercent}%
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-center font-mono text-[#8a9ab0]">{item.quantity}</td>
                         <td className="px-4 py-2.5 text-right font-mono text-[#8a9ab0]">{formatPrice(toN(item.price))}</td>
@@ -170,9 +177,17 @@ function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () =
                 {toN(o.discount) > 0 && <TotalRow label="ส่วนลด" value={`−${formatPrice(toN(o.discount))}`} dim />}
                 {toN(o.shippingFee) > 0 && <TotalRow label="ค่าจัดส่ง" value={formatPrice(toN(o.shippingFee))} />}
                 <div className="flex justify-between items-center pt-2 mt-1 border-t border-[#2d3548]">
-                  <span className="text-sm font-semibold text-white">ยอดรวมทั้งสิ้น</span>
+                  <span className="text-sm font-semibold text-white">
+                    {toN(o.remainingBalance) > 0 ? 'ยอดชำระ (มัดจำ)' : 'ยอดรวมทั้งสิ้น'}
+                  </span>
                   <span className="font-mono font-bold text-amber-400 text-base">{formatPrice(toN(o.total))}</span>
                 </div>
+                {toN(o.remainingBalance) > 0 && (
+                  <div className="flex justify-between items-center px-3 py-2 rounded-lg" style={{ background: '#2a1e5e', border: '1px solid #4a3a9a' }}>
+                    <span className="text-xs font-semibold" style={{ color: '#b09fff' }}>💜 ยอดค้างชำระ</span>
+                    <span className="font-mono font-semibold text-sm" style={{ color: '#b09fff' }}>{formatPrice(toN(o.remainingBalance))}</span>
+                  </div>
+                )}
               </div>
             </div>
 

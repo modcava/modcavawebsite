@@ -63,6 +63,8 @@ export function ProductCard({ product, isWished, onToggleWish, onQuickView, onNo
       emoji:          product.emoji,
       imageUrl:       product.imageUrl,
       categorySlug:   catSlug,
+      isPreorder:     product.isPreorder ?? false,
+      depositPercent: (product as { depositPercent?: number | null }).depositPercent ?? null,
     })
   }
 

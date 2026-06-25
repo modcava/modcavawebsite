@@ -237,6 +237,8 @@ model Product {
   // Scheduled release — null = available now; a future datetime = "coming soon"
   // (visible with a countdown but NOT buyable until the time passes).
   releaseAt      DateTime? @map("release_at")
+  // Deposit for preorder products: 1-100 (%) of full price paid upfront; null = full price
+  depositPercent Int?     @map("deposit_percent")
   category    Category    @relation(fields: [categoryId], references: [id])
   orderItems  OrderItem[]
   stockNotifications StockNotification[]
@@ -339,6 +341,9 @@ model Order {
   // Credit-card surcharge added when paymentMethod is "Credit Card" (already
   // included in `total`; stored separately for the invoice / accounting breakdown).
   surcharge     Decimal  @default(0) @db.Decimal(10, 2)
+  // Preorder deposit orders: amount still owed after the deposit is paid.
+  // 0 for non-deposit orders.
+  remainingBalance Decimal @default(0) @db.Decimal(10, 2) @map("remaining_balance")
   // Influencer commission earned on this order (snapshot at checkout, 0 if the
   // coupon used isn't an influencer code). Summed per code for payout reports.
   commissionAmount Decimal @default(0) @db.Decimal(10, 2) @map("commission_amount")
@@ -373,6 +378,9 @@ model OrderItem {
   quantity    Int
   price       Decimal @db.Decimal(10, 2)
   productName String  @map("product_name")
+  // Deposit snapshot: if set, `price` is the deposit amount (depositPercent% of full price).
+  // null = full price was paid.
+  depositPercent Int? @map("deposit_percent")
 
   @@index([orderId])
   @@map("order_items")

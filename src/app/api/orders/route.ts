@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
   const productIds = items.map((i) => i.productId)
   const dbProducts = await prisma.product.findMany({
     where: { id: { in: productIds }, isActive: true },
-    select: { id: true, price: true, stock: true, name: true, maxPerOrder: true, maxPerCustomer: true, releaseAt: true, categoryId: true },
+    select: { id: true, price: true, stock: true, name: true, maxPerOrder: true, maxPerCustomer: true, releaseAt: true, categoryId: true, isPreorder: true, depositPercent: true },
   })
 
   if (dbProducts.length !== productIds.length) {
@@ -90,8 +90,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // priceMap is the server's source of truth for prices.
+  // priceMap is the server's source of truth for full prices.
   const priceMap = Object.fromEntries(dbProducts.map((p) => [p.id, Number(p.price)]))
+  // depositPercentMap: % of full price paid now (null = pay full price)
+  const depositPercentMap = Object.fromEntries(
+    dbProducts.map((p) => [p.id, p.isPreorder && p.depositPercent ? p.depositPercent : null])
+  )
+  // effectivePriceMap: actual amount charged per unit
+  const effectivePriceMap = Object.fromEntries(
+    dbProducts.map((p) => {
+      const dep = depositPercentMap[p.id]
+      const full = Number(p.price)
+      return [p.id, dep ? Math.round(full * dep / 100 * 100) / 100 : full]
+    })
+  )
 
   for (const item of items) {
     const product = dbProducts.find((p) => p.id === item.productId)!
@@ -104,7 +116,14 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Compute money amounts server-side (no client input) ─────────
-  const subtotal = items.reduce((s, i) => s + priceMap[i.productId] * i.quantity, 0)
+  // subtotal = effective amounts (deposit prices for preorder items)
+  const subtotal = items.reduce((s, i) => s + effectivePriceMap[i.productId] * i.quantity, 0)
+  // remainingBalance = sum of the parts not paid now (preorder balance)
+  const remainingBalance = items.reduce((s, i) => {
+    const dep = depositPercentMap[i.productId]
+    if (!dep) return s
+    return s + (priceMap[i.productId] - effectivePriceMap[i.productId]) * i.quantity
+  }, 0)
 
   let coupon: Awaited<ReturnType<typeof prisma.coupon.findUnique>> = null
   let couponDiscount = 0
@@ -312,12 +331,14 @@ export async function POST(req: NextRequest) {
           surcharge:      cardSurcharge,
           commissionAmount,
           couponId:       coupon?.id ?? null,
+          remainingBalance,
           items: {
             create: items.map((i) => ({
-              productId:   i.productId,
-              quantity:    i.quantity,
-              price:       priceMap[i.productId], // ← DB price, never client
-              productName: nameMap[i.productId] || '',
+              productId:     i.productId,
+              quantity:      i.quantity,
+              price:         effectivePriceMap[i.productId], // deposit-adjusted price, never client
+              productName:   nameMap[i.productId] || '',
+              depositPercent: depositPercentMap[i.productId] ?? null,
             })),
           },
         },

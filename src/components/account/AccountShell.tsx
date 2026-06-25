@@ -56,6 +56,8 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
               maxPerOrder:    p.maxPerOrder ?? null,
               maxPerCustomer: p.maxPerCustomer ?? null,
               alreadyBought:  boughtMap[p.id] ?? 0,
+              isPreorder:     p.isPreorder ?? false,
+              depositPercent: p.depositPercent ?? null,
             }))
           )
         }
@@ -78,6 +80,8 @@ export function AccountShell({ children }: { children: React.ReactNode }) {
       condition: p.condition, setName: p.setName ?? null,
       emoji: p.emoji ?? null, imageUrl: p.imageUrl ?? null,
       categorySlug: p.category.slug,
+      isPreorder:     p.isPreorder ?? false,
+      depositPercent: p.depositPercent ?? null,
     })
     if (qty > 1) {
       const cap = Math.min(p.stock, p.maxPerOrder || Infinity, customerRemaining)

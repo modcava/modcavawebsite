@@ -124,7 +124,7 @@ const FREE_SHIPPING_THRESHOLD = 1000
 export default function CheckoutPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { items, total, clearCart } = useCart()
+  const { items, total, remainingTotal, clearCart } = useCart()
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [shipping, setShipping] = useState('SPX')
@@ -350,7 +350,8 @@ export default function CheckoutPage() {
     }
   }
 
-  const subtotal = total()
+  const subtotal = total()                  // deposit-adjusted total
+  const cartRemainingBalance = remainingTotal() // ส่วนที่ยังไม่จ่าย (preorder balance)
   const couponDiscount = couponResult?.discount ?? 0
   const pointsDiscount = pointsToUse
   // Free shipping when a FREE_SHIPPING coupon applies OR the product total after
@@ -699,9 +700,25 @@ export default function CheckoutPage() {
                     </p>
                   )}
                 </div>
-                <span style={{ fontFamily: "'Lora', serif", fontSize: '.9rem', fontWeight: 600, color: 'var(--sienna)', flexShrink: 0 }}>
-                  ฿{(item.price * item.quantity).toLocaleString()}
-                </span>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  {item.isPreorder && item.depositPercent ? (
+                    <>
+                      <div style={{ fontFamily: "'Lora', serif", fontSize: '.9rem', fontWeight: 600, color: 'var(--sienna)' }}>
+                        ฿{(Math.round(item.price * item.depositPercent / 100 * 100) / 100 * item.quantity).toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '.65rem', color: 'var(--ink-3)', textDecoration: 'line-through' }}>
+                        ฿{(item.price * item.quantity).toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '.65rem', color: '#7c5cff', fontWeight: 600 }}>
+                        มัดจำ {item.depositPercent}%
+                      </div>
+                    </>
+                  ) : (
+                    <span style={{ fontFamily: "'Lora', serif", fontSize: '.9rem', fontWeight: 600, color: 'var(--sienna)' }}>
+                      ฿{(item.price * item.quantity).toLocaleString()}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -744,11 +761,21 @@ export default function CheckoutPage() {
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--divider)', paddingTop: 10, marginTop: 4 }}>
-              <span style={{ fontSize: '.9rem', color: 'var(--ink)', fontWeight: 700 }}>ยอดชำระ</span>
+              <span style={{ fontSize: '.9rem', color: 'var(--ink)', fontWeight: 700 }}>
+                {cartRemainingBalance > 0 ? 'ยอดชำระ (มัดจำ)' : 'ยอดชำระ'}
+              </span>
               <span style={{ fontFamily: "'Lora', serif", fontSize: '1.4rem', fontWeight: 700, color: 'var(--sienna)' }}>
                 ฿{grandTotal.toLocaleString()}
               </span>
             </div>
+            {cartRemainingBalance > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.8rem', padding: '8px 12px', background: '#f3f0ff', borderRadius: 'var(--r)', border: '1px solid #d4c8ff' }}>
+                <span style={{ color: '#5b3fe0', fontWeight: 600 }}>💜 ยอดค้างชำระ (จ่ายเมื่อของมาถึง)</span>
+                <span style={{ color: '#5b3fe0', fontWeight: 700, fontFamily: "'Lora', serif" }}>
+                  ฿{cartRemainingBalance.toLocaleString()}
+                </span>
+              </div>
+            )}
             <div style={{ fontSize: '.72rem', color: 'var(--ink-3)', textAlign: 'right' }}>
               ได้รับแต้ม: <strong style={{ color: 'var(--sienna)' }}>{pointsToEarn} แต้ม</strong>
             </div>

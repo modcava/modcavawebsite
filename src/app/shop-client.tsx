@@ -589,6 +589,8 @@ export function ShopClient({ initialProducts }: Props) {
       condition: p.condition, setName: p.setName,
       emoji: p.emoji, imageUrl: p.imageUrl,
       categorySlug: p.category.slug,
+      isPreorder:     p.isPreorder ?? false,
+      depositPercent: (p as { depositPercent?: number | null }).depositPercent ?? null,
     })
     if (qty > 1) {
       const cap = Math.min(p.stock, p.maxPerOrder || Infinity, customerRemaining)
@@ -617,6 +619,8 @@ export function ShopClient({ initialProducts }: Props) {
               maxPerOrder:    p.maxPerOrder ?? null,
               maxPerCustomer: p.maxPerCustomer ?? null,
               alreadyBought:  boughtMap[p.id] ?? 0,
+              isPreorder:     p.isPreorder ?? false,
+              depositPercent: (p as { depositPercent?: number | null }).depositPercent ?? null,
             }))
           )
         }

@@ -73,6 +73,8 @@ const productSchema = z.object({
   // ── Purchase limits ───────────────────────────────────
   maxPerOrder:    optInt,
   maxPerCustomer: optInt,
+  // ── Preorder deposit ──────────────────────────────────
+  depositPercent: optInt,
   // ── Scheduled release ─────────────────────────────────
   // '' / null → clear (available now); a datetime string → "coming soon" until then.
   // undefined (not sent) → skip (PUT keeps the existing value).
