@@ -183,7 +183,7 @@ input, select { font-family: inherit; }
   gap: 16px;
 }
 
-/* ── Horizontal product rail (curated shelves: new arrivals, best sellers, related) ── */
+/* ── Horizontal product rail (cross-sell shelf: related products on PDP) ── */
 .product-rail {
   display: grid;
   grid-auto-flow: column;
@@ -210,6 +210,11 @@ input, select { font-family: inherit; }
   border-color: var(--sienna);
   box-shadow: 0 6px 24px rgba(184, 92, 42, .1);
   transform: translateY(-2px);
+}
+
+@keyframes annbar-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* ── Header responsive ── */

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import type { ProductWithCategory, CartItem } from '@/types'
@@ -11,13 +11,10 @@ import { CartDrawer } from '@/components/shop/CartDrawer'
 import { WishlistDrawer } from '@/components/shop/WishlistDrawer'
 import { ProductCard } from '@/components/shop/ProductCard'
 import { QuickViewModal } from '@/components/shop/QuickViewModal'
-import { ProductRail } from '@/components/shop/ProductRail'
 import { parseDomains } from '@/lib/domains'
-import { isComingSoon } from '@/lib/release'
 
 interface Props {
   initialProducts: ProductWithCategory[]
-  bestSellers?: ProductWithCategory[]
 }
 
 type Lang = 'en' | 'th'
@@ -60,7 +57,7 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   try { return JSON.parse(raw) as T } catch { return fallback }
 }
 
-export function ShopClient({ initialProducts, bestSellers = [] }: Props) {
+export function ShopClient({ initialProducts }: Props) {
   const { data: session, status } = useSession()
 
   // ── State ──────────────────────────────────────────────────
@@ -127,6 +124,15 @@ export function ShopClient({ initialProducts, bestSellers = [] }: Props) {
 
   const cart = useCart()
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Apply ?q= from the URL so a search run from another page's header (which
+  // navigates to /?q=…) lands here and filters the grid.
+  useEffect(() => {
+    const q = searchParams.get('q')
+    if (q && q !== searchQ) setSearchQ(q)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   // Refresh server data when user returns to this tab after ≥3 s away (picks up admin edits)
   const hiddenAtRef = useRef<number>(0)
@@ -740,15 +746,6 @@ export function ShopClient({ initialProducts, bestSellers = [] }: Props) {
     setAccName(''); setAccCatF(''); setAccInv('all')
   }
 
-  // "New Arrivals" shelf — products are already ordered createdAt desc from the
-  // server, so the first in-stock ones are the newest available.
-  const newArrivals = useMemo(
-    () => initialProducts.filter((p) => p.stock > 0 && !isComingSoon(p.releaseAt)).slice(0, 12),
-    [initialProducts],
-  )
-  // Curated shelves only make sense on the default landing (no category/search).
-  const showRails = currentCat === 'all' && !searchQ.trim()
-
   const cartCount = cart.count()
   const wishCount = wishlist.length
 
@@ -895,22 +892,6 @@ export function ShopClient({ initialProducts, bestSellers = [] }: Props) {
 
       {/* ── Main ── */}
       <main className="shop-main">
-        {/* ── Curated shelves (landing only) ── */}
-        {showRails && (
-          <>
-            <ProductRail
-              emoji="✨"
-              title={<><span className="en-text">New Arrivals</span><span className="th-text">มาใหม่ล่าสุด</span></>}
-              products={newArrivals}
-            />
-            <ProductRail
-              emoji="🔥"
-              title={<><span className="en-text">Best Sellers</span><span className="th-text">ขายดี</span></>}
-              products={bestSellers}
-            />
-          </>
-        )}
-
         {/* Section head */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
           <span className="eyebrow">{CAT_EN[currentCat] || 'PRODUCTS'}</span>

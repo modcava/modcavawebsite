@@ -4,8 +4,19 @@ import { useRouter } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { useState, useEffect, useCallback } from 'react'
 import { MemberModal } from '@/components/shop/MemberModal'
+import { AnnouncementBar } from '@/components/layout/AnnouncementBar'
 
 type Lang = 'en' | 'th'
+
+interface SuggestProduct {
+  id: string
+  name: string
+  nameTh?: string | null
+  setName?: string | null
+  price: number | string
+  imageUrl?: string | null
+  emoji?: string | null
+}
 
 interface Props {
   lang?: Lang
@@ -47,12 +58,44 @@ export function Header({
   // searchQ = ค่าที่ใช้ค้นหาจริง (อัปเดตเมื่อกด Enter หรือคลิกแว่น)
   const [draft, setDraft] = useState(searchQ)
 
+  // ── Search autocomplete ─────────────────────────────────────
+  const [suggest, setSuggest]         = useState<SuggestProduct[]>([])
+  const [showSuggest, setShowSuggest] = useState(false)
+
+  // Debounced product suggestions from the API — works on every page that has
+  // the header, not only the in-memory shop list.
+  useEffect(() => {
+    const q = draft.trim()
+    if (q.length < 2) { setSuggest([]); return }
+    const ctrl = new AbortController()
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/products?search=${encodeURIComponent(q)}&pageSize=8`, { signal: ctrl.signal })
+        if (!res.ok) return
+        const data = await res.json()
+        setSuggest(Array.isArray(data?.data) ? data.data : [])
+      } catch { /* aborted or network error — ignore */ }
+    }, 250)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [draft])
+
   function commitSearch() {
-    setSearchQ(draft)
+    setShowSuggest(false)
+    const q = draft.trim()
+    // On the shop page we filter in place (parent passes setSearchQ); elsewhere
+    // navigate to the shop with the query so the search actually runs.
+    if (setSearchQProp) setSearchQ(draft)
+    else if (q) router.push(`/?q=${encodeURIComponent(q)}`)
   }
   function clearSearch() {
     setDraft('')
     setSearchQ('')
+    setSuggest([])
+    setShowSuggest(false)
+  }
+  function goToProduct(id: string) {
+    setShowSuggest(false)
+    router.push(`/products/${id}`)
   }
 
   const handlePointsLoaded = useCallback((p: number) => setPoints(p), [])
@@ -83,6 +126,7 @@ export function Header({
 
   return (
     <>
+      <AnnouncementBar />
       <header style={{
         position: 'sticky', top: 0, zIndex: 100,
         background: 'rgba(250,247,242,.96)', backdropFilter: 'blur(12px)',
@@ -132,7 +176,12 @@ export function Header({
               type="text"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitSearch() }}
+              onFocus={() => setShowSuggest(true)}
+              onBlur={() => setTimeout(() => setShowSuggest(false), 120)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitSearch()
+                else if (e.key === 'Escape') setShowSuggest(false)
+              }}
               placeholder="Search cards, sets, products… / ค้นหา…"
               autoComplete="off"
               style={{ paddingLeft: 36, paddingRight: 32, fontSize: '.85rem' }}
@@ -144,6 +193,50 @@ export function Header({
               >
                 ✕
               </button>
+            )}
+
+            {/* Autocomplete dropdown */}
+            {showSuggest && draft.trim().length >= 2 && suggest.length > 0 && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+                background: '#fff', border: '1px solid var(--divider)', borderRadius: 'var(--r)',
+                boxShadow: '0 10px 34px rgba(42,34,24,.14)', zIndex: 200,
+                overflow: 'hidden', maxHeight: 400, overflowY: 'auto',
+              }}>
+                {suggest.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => goToProduct(p.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 12px', background: 'none', border: 'none', borderBottom: '1px solid var(--divider)', cursor: 'pointer', textAlign: 'left' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--paper-2)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                  >
+                    <div style={{ width: 34, height: 40, borderRadius: 4, background: 'var(--paper-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', overflow: 'hidden', flexShrink: 0 }}>
+                      {p.imageUrl
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={p.imageUrl} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        : <span>{p.emoji || '🃏'}</span>}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                      {(p.setName || p.nameTh) && (
+                        <div style={{ fontSize: '.7rem', color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.setName || p.nameTh}</div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--sienna)', flexShrink: 0 }}>฿{Number(p.price).toLocaleString()}</div>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={commitSearch}
+                  style={{ display: 'block', width: '100%', padding: '9px 12px', background: 'var(--paper-2)', border: 'none', cursor: 'pointer', fontSize: '.76rem', fontWeight: 600, color: 'var(--sienna)', textAlign: 'center' }}
+                >
+                  🔍 ดูผลทั้งหมดสำหรับ “{draft.trim()}”
+                </button>
+              </div>
             )}
           </div>
 
