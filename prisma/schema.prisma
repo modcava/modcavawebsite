@@ -102,6 +102,7 @@ model Address {
   name      String
   phone     String
   address   String   @db.Text
+  subdistrict String?               // ตำบล / แขวง
   district  String?
   province  String
   postal    String?
@@ -323,6 +324,7 @@ model Order {
   // Shipping info
   recipientName String?   @map("recipient_name")
   address       String?   @db.Text
+  subdistrict   String?               // ตำบล / แขวง
   district      String?
   province      String?
   postalCode    String?   @map("postal_code")

@@ -9,6 +9,7 @@ import { spendPoints } from '@/lib/points'
 import { parseCategoryIds, eligibleSubtotal } from '@/lib/coupon'
 import { CARD_SURCHARGE_RATE, CARD_MAX_TOTAL } from '@/lib/payment'
 import { sendOrderNotification } from '@/lib/discord'
+import { sendOrderReceivedEmail } from '@/lib/email'
 
 const SHIPPING_FEES: Record<string, number> = { 'Store Pickup': 0, EMS: 50, Flash: 45, SPX: 40 }
 const DEFAULT_SHIPPING_FEE = 60
@@ -33,6 +34,7 @@ const checkoutSchema = z.object({
   recipientName:  z.string().min(2),
   phone:          z.string().min(9),
   address:        z.string().min(5),
+  subdistrict:    z.string().min(1),
   district:       z.string().min(1),
   province:       z.string().min(1),
   postalCode:     z.string().length(5),
@@ -321,6 +323,7 @@ export async function POST(req: NextRequest) {
           recipientName:  shipping.recipientName,
           phone:          shipping.phone,
           address:        shipping.address,
+          subdistrict:    shipping.subdistrict,
           district:       shipping.district,
           province:       shipping.province,
           postalCode:     shipping.postalCode,
@@ -359,6 +362,32 @@ export async function POST(req: NextRequest) {
 
   // Fire-and-forget — ไม่ block response ถ้า Discord ช้าหรือล่ม
   sendOrderNotification(order).catch(() => {})
+
+  // Fire-and-forget — instant "order received" email with the summary + a link
+  // to pay / upload a slip. Gives the customer an inbox record immediately
+  // (previously the first customer email only went out on admin confirm).
+  if (session.user.email) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://modcava.com'
+    sendOrderReceivedEmail({
+      to:           session.user.email,
+      name:         session.user.name ?? '',
+      orderNumber:  order.orderNumber,
+      items:        order.items.map((it) => ({
+        productName: it.productName,
+        quantity:    it.quantity,
+        price:       Number(it.price),
+      })),
+      shippingFee:      Number(order.shippingFee),
+      discount:         Number(order.discount),
+      pointsUsed:       order.pointsUsed,
+      surcharge:        Number(order.surcharge),
+      total:            Number(order.total),
+      remainingBalance: Number(order.remainingBalance),
+      pointsEarned:     order.pointsEarned,
+      paymentMethod:    order.paymentMethod ?? 'PromptPay',
+      paymentUrl:       `${appUrl}/orders/${order.orderNumber}/payment`,
+    }).catch((e) => console.error('[sendOrderReceivedEmail]', e))
+  }
 
   return NextResponse.json({ data: order }, { status: 201 })
 }

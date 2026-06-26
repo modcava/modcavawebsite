@@ -183,6 +183,35 @@ input, select { font-family: inherit; }
   gap: 16px;
 }
 
+/* ── Horizontal product rail (curated shelves: new arrivals, best sellers, related) ── */
+.product-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(152px, 168px);
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.product-rail > * { scroll-snap-align: start; }
+.rail-card {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--divider);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  position: relative;
+  transition: border-color .18s, box-shadow .18s, transform .18s;
+}
+.rail-card:hover {
+  border-color: var(--sienna);
+  box-shadow: 0 6px 24px rgba(184, 92, 42, .1);
+  transform: translateY(-2px);
+}
+
 /* ── Header responsive ── */
 .header-inner  { display: flex; align-items: center; gap: 16px; padding: 10px 24px; max-width: 1340px; margin: 0 auto; }
 .header-search { flex: 1; min-width: 0; max-width: 440px; position: relative; }
@@ -210,4 +239,5 @@ input, select { font-family: inherit; }
   .shop-layout   { flex-direction: column; gap: 14px; }
   .shop-sidebar  { width: 100%; }
   .product-grid  { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .product-rail  { grid-auto-columns: minmax(140px, 150px); gap: 10px; }
 }

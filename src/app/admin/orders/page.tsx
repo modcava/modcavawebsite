@@ -21,6 +21,7 @@ interface OrderDetail {
   remainingBalance?: number | string | null
   recipientName?: string | null
   address?: string | null
+  subdistrict?: string | null
   district?: string | null
   province?: string | null
   postalCode?: string | null
@@ -113,7 +114,7 @@ function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () =
                 <div className="text-[10px] font-semibold text-[#8a9ab0] uppercase tracking-wider mb-2">ที่อยู่จัดส่ง</div>
                 <InfoRow label="ผู้รับ" value={o.recipientName || o.user.name || '—'} />
                 <InfoRow label="เบอร์" value={o.phone || '—'} />
-                <InfoRow label="ที่อยู่" value={[o.address, o.district, o.province, o.postalCode].filter(Boolean).join(', ') || '—'} />
+                <InfoRow label="ที่อยู่" value={[o.address, o.subdistrict, o.district, o.province, o.postalCode].filter(Boolean).join(', ') || '—'} />
                 <InfoRow label="ขนส่ง" value={o.shippingMethod || '—'} />
                 {o.trackingNumber && <InfoRow label="Tracking" value={`#${o.trackingNumber}`} highlight />}
               </div>

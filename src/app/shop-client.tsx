@@ -11,10 +11,13 @@ import { CartDrawer } from '@/components/shop/CartDrawer'
 import { WishlistDrawer } from '@/components/shop/WishlistDrawer'
 import { ProductCard } from '@/components/shop/ProductCard'
 import { QuickViewModal } from '@/components/shop/QuickViewModal'
+import { ProductRail } from '@/components/shop/ProductRail'
 import { parseDomains } from '@/lib/domains'
+import { isComingSoon } from '@/lib/release'
 
 interface Props {
   initialProducts: ProductWithCategory[]
+  bestSellers?: ProductWithCategory[]
 }
 
 type Lang = 'en' | 'th'
@@ -57,7 +60,7 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   try { return JSON.parse(raw) as T } catch { return fallback }
 }
 
-export function ShopClient({ initialProducts }: Props) {
+export function ShopClient({ initialProducts, bestSellers = [] }: Props) {
   const { data: session, status } = useSession()
 
   // ── State ──────────────────────────────────────────────────
@@ -737,6 +740,15 @@ export function ShopClient({ initialProducts }: Props) {
     setAccName(''); setAccCatF(''); setAccInv('all')
   }
 
+  // "New Arrivals" shelf — products are already ordered createdAt desc from the
+  // server, so the first in-stock ones are the newest available.
+  const newArrivals = useMemo(
+    () => initialProducts.filter((p) => p.stock > 0 && !isComingSoon(p.releaseAt)).slice(0, 12),
+    [initialProducts],
+  )
+  // Curated shelves only make sense on the default landing (no category/search).
+  const showRails = currentCat === 'all' && !searchQ.trim()
+
   const cartCount = cart.count()
   const wishCount = wishlist.length
 
@@ -883,6 +895,22 @@ export function ShopClient({ initialProducts }: Props) {
 
       {/* ── Main ── */}
       <main className="shop-main">
+        {/* ── Curated shelves (landing only) ── */}
+        {showRails && (
+          <>
+            <ProductRail
+              emoji="✨"
+              title={<><span className="en-text">New Arrivals</span><span className="th-text">มาใหม่ล่าสุด</span></>}
+              products={newArrivals}
+            />
+            <ProductRail
+              emoji="🔥"
+              title={<><span className="en-text">Best Sellers</span><span className="th-text">ขายดี</span></>}
+              products={bestSellers}
+            />
+          </>
+        )}
+
         {/* Section head */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
           <span className="eyebrow">{CAT_EN[currentCat] || 'PRODUCTS'}</span>

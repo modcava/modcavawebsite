@@ -1,25 +1,27 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { toast } from 'sonner'
+import { ThaiAddressSelect } from '@/components/shop/ThaiAddressSelect'
 
 // ── Types ─────────────────────────────────────────────────────
 interface Address {
-  id:        string
-  label:     string
-  name:      string
-  phone:     string
-  address:   string
-  district:  string
-  province:  string
-  postal:    string
-  isDefault: boolean
+  id:          string
+  label:       string
+  name:        string
+  phone:       string
+  address:     string
+  subdistrict: string
+  district:    string
+  province:    string
+  postal:      string
+  isDefault:   boolean
 }
 
 type FormData = Omit<Address, 'id' | 'isDefault'>
 
 const EMPTY_FORM: FormData = {
   label: 'บ้าน', name: '', phone: '',
-  address: '', district: '', province: '', postal: '',
+  address: '', subdistrict: '', district: '', province: '', postal: '',
 }
 
 const LABELS = ['บ้าน', 'ที่ทำงาน', 'อื่นๆ']
@@ -150,23 +152,14 @@ function AddressModal({
                 onFocus={focus} onBlur={blur} />
             </div>
 
-            {/* District + Province + Postal */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--ink-3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 5 }}>เขต / อำเภอ</div>
-                <input value={form.district} onChange={(e) => set('district', e.target.value)}
-                  placeholder="เขต/อำเภอ" style={inputCls} onFocus={focus} onBlur={blur} />
-              </div>
-              <div>
-                <div style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--ink-3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 5 }}>จังหวัด *</div>
-                <input value={form.province} onChange={(e) => set('province', e.target.value)}
-                  placeholder="จังหวัด" required style={inputCls} onFocus={focus} onBlur={blur} />
-              </div>
-              <div>
-                <div style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--ink-3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 5 }}>รหัสไปรษณีย์</div>
-                <input value={form.postal} onChange={(e) => set('postal', e.target.value)}
-                  placeholder="10xxx" maxLength={5} style={inputCls} onFocus={focus} onBlur={blur} />
-              </div>
+            {/* จังหวัด → อำเภอ/เขต → ตำบล/แขวง → รหัสไปรษณีย์ (เติมอัตโนมัติ) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <ThaiAddressSelect
+                value={{ province: form.province, district: form.district, subdistrict: form.subdistrict ?? '', postalCode: form.postal }}
+                onChange={(v) => setForm((prev) => ({ ...prev, province: v.province, district: v.district, subdistrict: v.subdistrict, postal: v.postalCode }))}
+                inputStyle={inputCls}
+                labelStyle={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--ink-3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 5, display: 'block' }}
+              />
             </div>
 
             {/* isDefault toggle */}
@@ -246,7 +239,7 @@ function AddressCard({
       <div style={{ fontSize: '.78rem', color: 'var(--ink-3)', lineHeight: 1.6 }}>
         📞 {addr.phone}<br />
         📍 {addr.address}<br />
-        {addr.district && `${addr.district}, `}{addr.province} {addr.postal}
+        {addr.subdistrict && `${addr.subdistrict}, `}{addr.district && `${addr.district}, `}{addr.province} {addr.postal}
       </div>
 
       {/* Action buttons */}

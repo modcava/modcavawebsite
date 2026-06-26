@@ -106,6 +106,93 @@ export async function sendOrderConfirmedEmail(opts: {
   })
 }
 
+// Instant "we received your order" email sent the moment an order is placed
+// (before payment). Carries the order summary + payment instructions so the
+// customer has a record in their inbox and a direct link to pay / upload a slip.
+export async function sendOrderReceivedEmail(opts: {
+  to: string
+  name: string
+  orderNumber: string
+  items: { productName: string; quantity: number; price: number }[]
+  shippingFee: number
+  discount: number
+  pointsUsed: number
+  surcharge: number
+  total: number             // amount payable now
+  remainingBalance: number  // preorder balance owed on delivery (0 if none)
+  pointsEarned: number
+  paymentMethod: string     // 'PromptPay' | 'Credit Card'
+  paymentUrl: string
+}) {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
+  const isCard  = opts.paymentMethod === 'Credit Card'
+
+  const subtotal = opts.items.reduce((s, it) => s + it.price * it.quantity, 0)
+
+  const itemsHtml = opts.items.map((it) => `
+    <tr>
+      <td style="padding:6px 0;color:#6b5e4e;font-size:14px;">${esc(it.productName)} × ${it.quantity}</td>
+      <td style="padding:6px 0;text-align:right;color:#2a2218;font-size:14px;white-space:nowrap;">฿${(it.price * it.quantity).toLocaleString()}</td>
+    </tr>`).join('')
+
+  // Summary rows (only render the ones that apply)
+  const row = (label: string, value: string, color = '#6b5e4e') => `
+    <tr>
+      <td style="padding:4px 0;color:${color};font-size:14px;">${label}</td>
+      <td style="padding:4px 0;text-align:right;color:${color};font-size:14px;white-space:nowrap;">${value}</td>
+    </tr>`
+  const summaryRows = [
+    row('ยอดสินค้า', `฿${subtotal.toLocaleString()}`),
+    row('ค่าจัดส่ง', opts.shippingFee > 0 ? `฿${opts.shippingFee.toLocaleString()}` : 'ฟรี'),
+    opts.discount  > 0 ? row('ส่วนลดคูปอง', `-฿${opts.discount.toLocaleString()}`, '#2d7a42') : '',
+    opts.pointsUsed > 0 ? row('ส่วนลดแต้มสะสม', `-฿${opts.pointsUsed.toLocaleString()}`, '#2d7a42') : '',
+    opts.surcharge > 0 ? row('ค่าบริการบัตรเครดิต (5%)', `+฿${opts.surcharge.toLocaleString()}`) : '',
+  ].join('')
+
+  const remainingHtml = opts.remainingBalance > 0
+    ? `<p style="background:#f3f0ff;border:1px solid #d4c8ff;border-radius:8px;padding:10px 14px;color:#5b3fe0;font-size:13px;margin:0 0 16px;">💜 ยอดค้างชำระ (จ่ายเมื่อของมาถึง): <strong>฿${opts.remainingBalance.toLocaleString()}</strong></p>`
+    : ''
+
+  const payInstructions = isCard
+    ? 'กรุณากดปุ่มด้านล่างเพื่อ <strong>ทักเพจรับลิงก์ชำระผ่านบัตรเครดิต</strong> ภายใน 48 ชั่วโมง'
+    : 'กรุณาโอนเงินตามยอดด้านบน แล้ว <strong>แนบสลิปการโอน</strong> ที่ปุ่มด้านล่าง'
+
+  await sendCustomEmail({
+    to:      opts.to,
+    subject: `[${appName}] ได้รับคำสั่งซื้อแล้ว · รอชำระเงิน — #${opts.orderNumber}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
+        <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">🧾 เราได้รับคำสั่งซื้อของคุณแล้ว</h2>
+        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${esc(opts.name) || 'คุณ'},<br/>ขอบคุณสำหรับการสั่งซื้อ! ออเดอร์ของคุณอยู่ในสถานะ <strong style="color:#2a2218;">รอชำระเงิน</strong> — ${payInstructions}</p>
+        <div style="background:#fff;border:1px solid #e5ddd4;border-radius:8px;padding:16px 20px;margin-bottom:16px;">
+          <p style="color:#6b5e4e;margin:0 0 10px;">หมายเลขออเดอร์: <strong style="color:#2a2218;">#${opts.orderNumber}</strong></p>
+          <table style="width:100%;border-collapse:collapse;border-top:1px solid #e5ddd4;">
+            ${itemsHtml}
+          </table>
+          <table style="width:100%;border-collapse:collapse;border-top:1px solid #e5ddd4;margin-top:6px;padding-top:6px;">
+            ${summaryRows}
+            <tr>
+              <td style="padding:10px 0 0;color:#2a2218;font-weight:700;border-top:1px solid #e5ddd4;">ยอดชำระ</td>
+              <td style="padding:10px 0 0;text-align:right;color:#8b5a2b;font-weight:700;font-size:16px;white-space:nowrap;border-top:1px solid #e5ddd4;">฿${opts.total.toLocaleString()}</td>
+            </tr>
+          </table>
+        </div>
+        ${remainingHtml}
+        <div style="background:#fff8e6;border:1px solid #ffe08a;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
+          <p style="color:#92610a;font-size:13px;margin:0;">⏰ กรุณาชำระเงินภายใน <strong>48 ชั่วโมง</strong> มิฉะนั้นออเดอร์จะถูกยกเลิกอัตโนมัติ (แต้ม/คูปองที่ใช้จะถูกคืนให้)</p>
+        </div>
+        <a href="${opts.paymentUrl}"
+          style="display:inline-block;padding:13px 32px;background:#8b5a2b;color:#fff;border-radius:8px;font-weight:700;text-decoration:none;font-size:15px;">
+          ${isCard ? '💳 ชำระผ่านบัตรเครดิต' : '💳 ชำระเงิน & แนบสลิป'}
+        </a>
+        <p style="color:#a08060;font-size:13px;margin-top:20px;">คุณจะได้รับ <strong>${opts.pointsEarned.toLocaleString()} แต้ม</strong> เมื่อชำระเงินสำเร็จ · มีคำถามทักได้ที่ Line OA หรือ Facebook: Modcavashop</p>
+        <hr style="border:none;border-top:1px solid #e5ddd4;margin:24px 0;"/>
+        <p style="color:#c4b49a;font-size:11px;">© ${new Date().getFullYear()} ${appName} · 337/1 ถ.รื่นรมย์ อ.เมือง จ.ขอนแก่น 40000</p>
+      </div>
+    `,
+  })
+}
+
 export async function sendShippedEmail(opts: {
   to: string
   name: string

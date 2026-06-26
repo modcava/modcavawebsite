@@ -6,9 +6,11 @@ import { prisma } from '@/lib/prisma'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { ProductActions } from '@/components/shop/ProductActions'
+import { ProductRail } from '@/components/shop/ProductRail'
 import { isComingSoon, formatReleaseDate } from '@/lib/release'
 import { formatDomains } from '@/lib/domains'
 import { safeJsonLd } from '@/lib/utils'
+import type { ProductWithCategory } from '@/types'
 
 // ISR: แคชหน้าไว้ 60 วิ (เร็วขึ้น + ลดภาระ DB) — สต็อก/ราคาอาจช้าได้สูงสุด 60 วิ
 // แต่ตอนหยิบลงตะกร้า/เช็คเอาต์มีการตรวจสต็อกจริงอีกชั้น
@@ -47,6 +49,33 @@ function toNum(price: unknown): number {
 const getProduct = cache(async (id: string) =>
   prisma.product.findUnique({ where: { id, isActive: true }, include: { category: true } }),
 )
+
+// Related products for cross-sell: same category, in-stock first, newest first.
+// Items from the same set/chapter are bubbled to the front for relevance.
+async function getRelated(product: {
+  id: string; categoryId: string; setName: string | null; chapter: string | null
+}): Promise<ProductWithCategory[]> {
+  const pool = await prisma.product.findMany({
+    where: {
+      isActive: true,
+      price: { gt: 0 },
+      categoryId: product.categoryId,
+      id: { not: product.id },
+    },
+    include: { category: true },
+    orderBy: [{ stock: 'desc' }, { createdAt: 'desc' }],
+    take: 24,
+  })
+  const matchesSet = (p: { setName: string | null; chapter: string | null }) =>
+    (!!product.setName && p.setName === product.setName) ||
+    (!!product.chapter && p.chapter === product.chapter)
+  // Stable sort keeps the stock/recency order within each relevance group.
+  const ranked = [...pool].sort((a, b) => (matchesSet(a) ? 0 : 1) - (matchesSet(b) ? 0 : 1))
+  return ranked.slice(0, 10).map((p) => ({
+    ...p,
+    price: p.price as unknown as ProductWithCategory['price'],
+  }))
+}
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const product = await getProduct(params.id)
@@ -91,6 +120,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
   const product = await getProduct(params.id)
   if (!product) notFound()
 
+  const related = await getRelated(product)
   const price = toNum(product.price)
   const catSlug = product.category.slug
   const comingSoon = isComingSoon(product.releaseAt)
@@ -302,6 +332,17 @@ export default async function ProductPage({ params }: { params: { id: string } }
             </Link>
           </div>
         </div>
+
+        {/* ── Related products (cross-sell) ── */}
+        {related.length > 0 && (
+          <section style={{ marginTop: 48, borderTop: '1px solid var(--divider)', paddingTop: 28 }}>
+            <ProductRail
+              emoji="🛍️"
+              title={<><span className="en-text">You may also like</span><span className="th-text">สินค้าที่เกี่ยวข้อง</span></>}
+              products={related}
+            />
+          </section>
+        )}
       </main>
       <Footer />
     </>

@@ -182,7 +182,7 @@ export default async function OrdersPage() {
                     )}
                     {order.address && (
                       <span style={{ color: 'var(--ink-3)' }}>
-                        📍 {order.recipientName} · {order.district}, {order.province}
+                        📍 {order.recipientName} · {order.subdistrict ? `${order.subdistrict}, ` : ''}{order.district}, {order.province}
                       </span>
                     )}
                     {/* สลิปที่ส่งแล้ว */}

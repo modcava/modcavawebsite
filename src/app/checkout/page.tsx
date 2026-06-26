@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { useCart } from '@/store/cart'
 import { CARD_MAX_TOTAL } from '@/lib/payment'
+import { ThaiAddressSelect } from '@/components/shop/ThaiAddressSelect'
 import Link from 'next/link'
 
 type SavedAddress = {
@@ -16,6 +17,7 @@ type SavedAddress = {
   name: string
   phone: string
   address: string
+  subdistrict: string | null
   district: string | null
   province: string
   postal: string | null
@@ -26,8 +28,9 @@ const schema = z.object({
   recipientName:  z.string().min(2, 'กรุณากรอกชื่อ'),
   phone:          z.string().min(9, 'เบอร์โทรไม่ถูกต้อง'),
   address:        z.string().min(5, 'กรุณากรอกที่อยู่'),
-  district:       z.string().min(1, 'กรุณากรอกเขต/อำเภอ'),
-  province:       z.string().min(1, 'กรุณากรอกจังหวัด'),
+  subdistrict:    z.string().min(1, 'กรุณาเลือกแขวง/ตำบล'),
+  district:       z.string().min(1, 'กรุณาเลือกเขต/อำเภอ'),
+  province:       z.string().min(1, 'กรุณาเลือกจังหวัด'),
   postalCode:     z.string().length(5, 'รหัสไปรษณีย์ต้องมี 5 หลัก'),
   shippingMethod: z.string(),
   paymentMethod:  z.string(),
@@ -144,10 +147,22 @@ export default function CheckoutPage() {
   const [couponError, setCouponError] = useState('')
 
   // useForm ต้องประกาศก่อน useEffect ที่ใช้ reset
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<Form>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<Form>({
     resolver: zodResolver(schema),
-    defaultValues: { shippingMethod: 'SPX', paymentMethod: 'PromptPay' },
+    defaultValues: {
+      shippingMethod: 'SPX', paymentMethod: 'PromptPay',
+      province: '', district: '', subdistrict: '', postalCode: '',
+    },
   })
+
+  // Address parts are driven by the cascading <ThaiAddressSelect>; mirror them
+  // into RHF (registered as hidden inputs) so zod validation + submit still work.
+  const addrParts = {
+    province:    watch('province')    ?? '',
+    district:    watch('district')    ?? '',
+    subdistrict: watch('subdistrict') ?? '',
+    postalCode:  watch('postalCode')  ?? '',
+  }
 
   // Rehydrate cart from localStorage (skipHydration: true in store)
   useEffect(() => {
@@ -170,6 +185,7 @@ export default function CheckoutPage() {
       recipientName:  addr.name,
       phone:          addr.phone,
       address:        addr.address,
+      subdistrict:    addr.subdistrict ?? '',
       district:       addr.district  ?? '',
       province:       addr.province,
       postalCode:     addr.postal    ?? '',
@@ -200,6 +216,7 @@ export default function CheckoutPage() {
               recipientName:  def.name,
               phone:          def.phone,
               address:        def.address,
+              subdistrict:    def.subdistrict ?? '',
               district:       def.district  ?? '',
               province:       def.province,
               postalCode:     def.postal    ?? '',
@@ -330,13 +347,14 @@ export default function CheckoutPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            label:    'ที่อยู่จัดส่ง',
-            name:     data.recipientName,
-            phone:    data.phone,
-            address:  data.address,
-            district: data.district,
-            province: data.province,
-            postal:   data.postalCode,
+            label:       'ที่อยู่จัดส่ง',
+            name:        data.recipientName,
+            phone:       data.phone,
+            address:     data.address,
+            subdistrict: data.subdistrict,
+            district:    data.district,
+            province:    data.province,
+            postal:      data.postalCode,
           }),
         }).catch(() => {})
       }
@@ -417,37 +435,42 @@ export default function CheckoutPage() {
                 {errors.recipientName && <p style={S.error}>{errors.recipientName.message}</p>}
               </div>
 
-              <div>
+              <div style={{ gridColumn: '1 / -1' }}>
                 <label style={S.label}>เบอร์โทรศัพท์</label>
                 <input {...register('phone')} style={S.input} placeholder="0812345678" />
                 {errors.phone && <p style={S.error}>{errors.phone.message}</p>}
               </div>
 
-              <div>
-                <label style={S.label}>รหัสไปรษณีย์</label>
-                <input {...register('postalCode')} style={S.input} placeholder="10110" maxLength={5} />
-                {errors.postalCode && <p style={S.error}>{errors.postalCode.message}</p>}
-              </div>
-
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={S.label}>ที่อยู่ (บ้านเลขที่ ถนน ซอย)</label>
+                <label style={S.label}>ที่อยู่ (บ้านเลขที่ ถนน ซอย หมู่)</label>
                 <input {...register('address')} style={S.input} placeholder="123 ถนน..." />
                 {errors.address && <p style={S.error}>{errors.address.message}</p>}
               </div>
 
-              <div>
-                <label style={S.label}>เขต / อำเภอ</label>
-                <input {...register('district')} style={S.input} placeholder="เขต/อำเภอ" />
-                {errors.district && <p style={S.error}>{errors.district.message}</p>}
-              </div>
-
-              <div>
-                <label style={S.label}>จังหวัด</label>
-                <input {...register('province')} style={S.input} placeholder="จังหวัด" />
-                {errors.province && <p style={S.error}>{errors.province.message}</p>}
-              </div>
+              {/* Cascading จังหวัด → อำเภอ/เขต → ตำบล/แขวง → รหัสไปรษณีย์ (เติมอัตโนมัติ).
+                  Values live in RHF via these hidden inputs; the select drives them. */}
+              <input type="hidden" {...register('province')} />
+              <input type="hidden" {...register('district')} />
+              <input type="hidden" {...register('subdistrict')} />
+              <input type="hidden" {...register('postalCode')} />
+              <ThaiAddressSelect
+                value={addrParts}
+                onChange={(v) => {
+                  setValue('province',    v.province,    { shouldValidate: true })
+                  setValue('district',    v.district,    { shouldValidate: true })
+                  setValue('subdistrict', v.subdistrict, { shouldValidate: true })
+                  setValue('postalCode',  v.postalCode,  { shouldValidate: true })
+                }}
+                inputStyle={S.input}
+                labelStyle={S.label}
+              />
 
             </div>
+            {(errors.province || errors.district || errors.subdistrict || errors.postalCode) && (
+              <p style={S.error}>
+                {errors.province?.message || errors.district?.message || errors.subdistrict?.message || errors.postalCode?.message}
+              </p>
+            )}
 
             <label style={{
               display: 'flex',
@@ -893,6 +916,7 @@ export default function CheckoutPage() {
                   {/* Full address */}
                   <div style={{ fontSize: '.78rem', color: 'var(--ink-2)', lineHeight: 1.5 }}>
                     {addr.address}
+                    {addr.subdistrict ? ` ${addr.subdistrict}` : ''}
                     {addr.district ? ` ${addr.district}` : ''}
                     {` ${addr.province}`}
                     {addr.postal ? ` ${addr.postal}` : ''}
