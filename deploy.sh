@@ -23,13 +23,11 @@ else
   echo "==> [2/5] ข้าม npm ci  (deps ไม่เปลี่ยน)"
 fi
 
-# push schema เฉพาะเมื่อ prisma/schema.prisma เปลี่ยน
-if echo "$changed" | grep -q "prisma/schema.prisma"; then
-  echo "==> [3/5] prisma db push  (schema เปลี่ยน)"
-  npx prisma db push
-else
-  echo "==> [3/5] ข้าม prisma db push  (schema ไม่เปลี่ยน)"
-fi
+# Sync DB schema + regenerate Prisma Client ทุกครั้ง (db push จะ generate client ให้ด้วย)
+# กัน client เก่าไม่ตรง schema จน build พัง ("Property '...' does not exist") หรือ DB
+# ขาดคอลัมน์จน runtime พัง. Idempotent — ถ้าไม่มีอะไรเปลี่ยนจะเร็วมาก.
+echo "==> [3/5] prisma db push  (sync DB + generate client)"
+npx prisma db push
 
 echo "==> [4/5] build  (heap 3GB กัน OOM บน RAM 2GB)"
 NODE_OPTIONS="--max-old-space-size=3072" npm run build
