@@ -23,11 +23,14 @@ else
   echo "==> [2/5] ข้าม npm ci  (deps ไม่เปลี่ยน)"
 fi
 
-# Sync DB schema + regenerate Prisma Client ทุกครั้ง (db push จะ generate client ให้ด้วย)
-# กัน client เก่าไม่ตรง schema จน build พัง ("Property '...' does not exist") หรือ DB
-# ขาดคอลัมน์จน runtime พัง. Idempotent — ถ้าไม่มีอะไรเปลี่ยนจะเร็วมาก.
-echo "==> [3/5] prisma db push  (sync DB + generate client)"
+# Sync DB schema + regenerate Prisma Client ทุกครั้ง. กัน client เก่าไม่ตรง schema จน
+# build พัง ("Property '...' does not exist") หรือ DB ขาดคอลัมน์จน runtime พัง.
+# หมายเหตุ: `db push` จะ "ไม่" regenerate client เมื่อ DB sync อยู่แล้ว (เช่น push มือไปก่อน)
+# และถ้า lockfile ไม่เปลี่ยน npm ci ก็ถูกข้าม (postinstall ไม่รัน) — จึง generate ตรงๆ เสมอ.
+# Idempotent — ถ้าไม่มีอะไรเปลี่ยนจะเร็วมาก.
+echo "==> [3/5] prisma db push + generate  (sync DB + regenerate client)"
 npx prisma db push
+npx prisma generate
 
 echo "==> [4/5] build  (heap 3GB กัน OOM บน RAM 2GB)"
 NODE_OPTIONS="--max-old-space-size=3072" npm run build
