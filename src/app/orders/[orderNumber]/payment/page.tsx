@@ -14,6 +14,7 @@ interface OrderInfo {
   surcharge: number
   status: string
   remainingBalance: number
+  balanceShippingFee: number
   balanceSlipUrl: string | null
   balancePaidAt: string | null
 }
@@ -277,8 +278,15 @@ export default function PaymentPage() {
         <div style={{ background: '#f3f0ff', border: '1px solid #d4c8ff', borderRadius: 'var(--r-lg)', padding: '18px 22px', marginBottom: 20, textAlign: 'center' }}>
           <div style={{ fontSize: '.78rem', color: '#6b5e4e', marginBottom: 6 }}>ยอดคงเหลือที่ต้องชำระ</div>
           <div style={{ fontFamily: "'Lora', serif", fontSize: '2rem', fontWeight: 700, color: '#5b3fe0' }}>
-            ฿{order.remainingBalance.toLocaleString()}
+            ฿{(order.remainingBalance + (order.balanceShippingFee ?? 0)).toLocaleString()}
           </div>
+          {(order.balanceShippingFee ?? 0) > 0 && (
+            <div style={{ fontSize: '.74rem', color: '#6b5e4e', marginTop: 6, display: 'flex', justifyContent: 'center', gap: 6 }}>
+              <span>ยอดสินค้า ฿{order.remainingBalance.toLocaleString()}</span>
+              <span>+</span>
+              <span>ค่าจัดส่ง ฿{order.balanceShippingFee.toLocaleString()}</span>
+            </div>
+          )}
           <div style={{ fontSize: '.74rem', color: 'var(--ink-3)', marginTop: 4 }}>
             (มัดจำที่ชำระแล้ว ฿{order.total.toLocaleString()})
           </div>

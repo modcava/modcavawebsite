@@ -21,6 +21,7 @@ interface OrderDetail {
   discount: number | string
   shippingFee: number | string
   remainingBalance?: number | string | null
+  balanceShippingFee?: number | string | null
   recipientName?: string | null
   address?: string | null
   subdistrict?: string | null
@@ -222,8 +223,13 @@ function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () =
                 {toN(o.remainingBalance) > 0 && !o.balancePaidAt && (
                   <>
                     <div className="flex justify-between items-center px-3 py-2 rounded-lg" style={{ background: '#2a1e5e', border: '1px solid #4a3a9a' }}>
-                      <span className="text-xs font-semibold" style={{ color: '#b09fff' }}>💜 ยอดค้างชำระ</span>
-                      <span className="font-mono font-semibold text-sm" style={{ color: '#b09fff' }}>{formatPrice(toN(o.remainingBalance))}</span>
+                      <span className="text-xs font-semibold" style={{ color: '#b09fff' }}>
+                        💜 ยอดค้างชำระ
+                        {toN(o.balanceShippingFee) > 0 && (
+                          <span className="font-normal" style={{ color: '#8a7fc4' }}> (สินค้า {formatPrice(toN(o.remainingBalance))} + ค่าส่ง {formatPrice(toN(o.balanceShippingFee))})</span>
+                        )}
+                      </span>
+                      <span className="font-mono font-semibold text-sm" style={{ color: '#b09fff' }}>{formatPrice(toN(o.remainingBalance) + toN(o.balanceShippingFee))}</span>
                     </div>
                     {(o.status === 'CONFIRMED' || o.status === 'SHIPPED') ? (
                       <div className="flex gap-2 pt-1">

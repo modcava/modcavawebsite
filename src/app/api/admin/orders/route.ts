@@ -82,13 +82,16 @@ export async function PATCH(req: NextRequest) {
     const ord = await prisma.order.findUnique({
       where: { id },
       select: {
-        id: true, orderNumber: true, total: true, remainingBalance: true, balancePaidAt: true,
+        id: true, orderNumber: true, total: true, shippingFee: true,
+        remainingBalance: true, balanceShippingFee: true, balancePaidAt: true,
         user: { select: { name: true, email: true } },
       },
     })
     if (!ord) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
     const remaining = Number(ord.remainingBalance)
+    // Deposit orders defer shipping to the balance payment — collected together with it.
+    const balanceShip = Number(ord.balanceShippingFee)
     if (remaining <= 0 || ord.balancePaidAt) {
       return NextResponse.json({ error: 'ออเดอร์นี้ไม่มียอดคงเหลือค้างชำระ' }, { status: 400 })
     }
@@ -106,6 +109,7 @@ export async function PATCH(req: NextRequest) {
           name:             ord.user.name ?? '',
           orderNumber:      ord.orderNumber,
           remainingBalance: remaining,
+          shippingFee:      balanceShip,
           depositPaid:      Number(ord.total),
           paymentUrl:       `${appUrl}/orders/${ord.orderNumber}/payment?type=balance`,
         })
@@ -125,26 +129,36 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    // confirm — ปิดยอดคงเหลือแบบ atomic (กันกดซ้ำ/แอดมินสองคน)
+    // confirm — ปิดยอดคงเหลือแบบ atomic (กันกดซ้ำ/แอดมินสองคน). ค่าจัดส่งที่เลื่อนมา
+    // เก็บรอบนี้ ถูกพับเข้า shippingFee + total เพื่อให้รายงาน/ใบเสร็จเห็นยอดที่เก็บจริง.
     const upd = await prisma.order.updateMany({
       where: { id, balancePaidAt: null },
-      data:  { balancePaidAt: new Date(), remainingBalance: 0 },
+      data:  {
+        balancePaidAt: new Date(),
+        remainingBalance: 0,
+        ...(balanceShip > 0 && {
+          total:              Number(ord.total) + balanceShip,
+          shippingFee:        Number(ord.shippingFee) + balanceShip,
+          balanceShippingFee: 0,
+        }),
+      },
     })
     if (upd.count === 0) {
       return NextResponse.json({ error: 'ยืนยันไม่สำเร็จ (ยอดถูกปิดไปแล้ว)' }, { status: 400 })
     }
+    const balanceCollected = remaining + balanceShip
     if (ord.user?.email) {
       sendBalancePaidEmail({
         to:          ord.user.email,
         name:        ord.user.name ?? '',
         orderNumber: ord.orderNumber,
-        amount:      remaining,
+        amount:      balanceCollected,
       }).catch((e) => console.error('[sendBalancePaidEmail]', e))
     }
     if (ctx) {
       await logAudit(ctx, {
         action: 'order.balance_confirm', resource: 'order', resourceId: id,
-        details: { orderNumber: ord.orderNumber, amount: remaining }, req,
+        details: { orderNumber: ord.orderNumber, amount: balanceCollected, shippingFee: balanceShip }, req,
       })
     }
     return NextResponse.json({ data: { ok: true } })

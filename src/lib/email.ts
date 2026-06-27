@@ -115,6 +115,7 @@ export async function sendOrderReceivedEmail(opts: {
   orderNumber: string
   items: { productName: string; quantity: number; price: number }[]
   shippingFee: number
+  balanceShippingFee?: number // deposit orders: shipping deferred to the balance payment (0 if none / charged now)
   discount: number
   pointsUsed: number
   surcharge: number
@@ -141,16 +142,21 @@ export async function sendOrderReceivedEmail(opts: {
       <td style="padding:4px 0;color:${color};font-size:14px;">${label}</td>
       <td style="padding:4px 0;text-align:right;color:${color};font-size:14px;white-space:nowrap;">${value}</td>
     </tr>`
+  const balanceShip = opts.balanceShippingFee ?? 0
+  // Deposit orders don't pay shipping with the deposit — it's collected with the balance.
+  const shipValue = balanceShip > 0
+    ? 'คิดตอนชำระยอดคงเหลือ'
+    : (opts.shippingFee > 0 ? `฿${opts.shippingFee.toLocaleString()}` : 'ฟรี')
   const summaryRows = [
     row('ยอดสินค้า', `฿${subtotal.toLocaleString()}`),
-    row('ค่าจัดส่ง', opts.shippingFee > 0 ? `฿${opts.shippingFee.toLocaleString()}` : 'ฟรี'),
+    row('ค่าจัดส่ง', shipValue),
     opts.discount  > 0 ? row('ส่วนลดคูปอง', `-฿${opts.discount.toLocaleString()}`, '#2d7a42') : '',
     opts.pointsUsed > 0 ? row('ส่วนลดแต้มสะสม', `-฿${opts.pointsUsed.toLocaleString()}`, '#2d7a42') : '',
     opts.surcharge > 0 ? row('ค่าบริการบัตรเครดิต (5%)', `+฿${opts.surcharge.toLocaleString()}`) : '',
   ].join('')
 
   const remainingHtml = opts.remainingBalance > 0
-    ? `<p style="background:#f3f0ff;border:1px solid #d4c8ff;border-radius:8px;padding:10px 14px;color:#5b3fe0;font-size:13px;margin:0 0 16px;">💜 ยอดค้างชำระ (จ่ายเมื่อของมาถึง): <strong>฿${opts.remainingBalance.toLocaleString()}</strong></p>`
+    ? `<p style="background:#f3f0ff;border:1px solid #d4c8ff;border-radius:8px;padding:10px 14px;color:#5b3fe0;font-size:13px;margin:0 0 16px;">💜 ยอดค้างชำระ (จ่ายเมื่อของมาถึง): <strong>฿${(opts.remainingBalance + balanceShip).toLocaleString()}</strong>${balanceShip > 0 ? ` <span style="color:#7a6e5e;">(รวมค่าจัดส่ง ฿${balanceShip.toLocaleString()})</span>` : ''}</p>`
     : ''
 
   const payInstructions = isCard
@@ -200,9 +206,17 @@ export async function sendBalanceDueEmail(opts: {
   orderNumber: string
   remainingBalance: number
   depositPaid: number       // ยอดมัดจำที่จ่ายไปแล้ว (Order.total)
+  shippingFee?: number      // ค่าจัดส่งที่เลื่อนมาเก็บรอบนี้ (0 ถ้าฟรี/เก็บไปแล้ว)
   paymentUrl: string        // .../orders/{n}/payment?type=balance
 }) {
   const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
+  const shippingFee = opts.shippingFee ?? 0
+  const balanceDue = opts.remainingBalance + shippingFee
+  // Deposit orders defer shipping to this balance payment — show the breakdown when it applies.
+  const breakdownRows = shippingFee > 0
+    ? `<tr><td style="padding:4px 0;color:#6b5e4e;font-size:14px;">ยอดคงเหลือสินค้า</td><td style="padding:4px 0;text-align:right;color:#6b5e4e;font-size:14px;white-space:nowrap;">฿${opts.remainingBalance.toLocaleString()}</td></tr>
+            <tr><td style="padding:4px 0;color:#6b5e4e;font-size:14px;">ค่าจัดส่ง</td><td style="padding:4px 0;text-align:right;color:#6b5e4e;font-size:14px;white-space:nowrap;">฿${shippingFee.toLocaleString()}</td></tr>`
+    : ''
   // คืน result ของ SMTP (มี messageId) เพื่อให้ผู้เรียก await + รู้ผลจริงได้
   // (ใช้ระบบเดียวกับ api/admin/send-email)
   return sendCustomEmail({
@@ -215,7 +229,8 @@ export async function sendBalanceDueEmail(opts: {
         <div style="background:#f3f0ff;border:1px solid #d4c8ff;border-radius:8px;padding:16px 20px;margin-bottom:18px;">
           <table style="width:100%;border-collapse:collapse;">
             <tr><td style="padding:4px 0;color:#6b5e4e;font-size:14px;">มัดจำที่ชำระแล้ว</td><td style="padding:4px 0;text-align:right;color:#6b5e4e;font-size:14px;white-space:nowrap;">฿${opts.depositPaid.toLocaleString()}</td></tr>
-            <tr><td style="padding:8px 0 0;color:#5b3fe0;font-weight:700;border-top:1px solid #d4c8ff;">ยอดคงเหลือที่ต้องชำระ</td><td style="padding:8px 0 0;text-align:right;color:#5b3fe0;font-weight:700;font-size:18px;white-space:nowrap;border-top:1px solid #d4c8ff;">฿${opts.remainingBalance.toLocaleString()}</td></tr>
+            ${breakdownRows}
+            <tr><td style="padding:8px 0 0;color:#5b3fe0;font-weight:700;border-top:1px solid #d4c8ff;">ยอดคงเหลือที่ต้องชำระ</td><td style="padding:8px 0 0;text-align:right;color:#5b3fe0;font-weight:700;font-size:18px;white-space:nowrap;border-top:1px solid #d4c8ff;">฿${balanceDue.toLocaleString()}</td></tr>
           </table>
         </div>
         <a href="${opts.paymentUrl}"

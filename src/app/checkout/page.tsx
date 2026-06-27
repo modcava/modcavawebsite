@@ -372,11 +372,17 @@ export default function CheckoutPage() {
   const cartRemainingBalance = remainingTotal() // ส่วนที่ยังไม่จ่าย (preorder balance)
   const couponDiscount = couponResult?.discount ?? 0
   const pointsDiscount = pointsToUse
-  // Free shipping when a FREE_SHIPPING coupon applies OR the product total after
-  // coupon + points discounts reaches the threshold (computed AFTER discounts).
-  const netAfterDiscounts = subtotal - couponDiscount - pointsDiscount
-  const freeShipping = !!couponResult?.freeShipping || netAfterDiscounts >= FREE_SHIPPING_THRESHOLD
-  const shippingFee = freeShipping ? 0 : (SHIPPING_FEE[shipping] ?? 60)
+  // Free shipping when a FREE_SHIPPING coupon applies OR the product total after coupon +
+  // points discounts reaches the threshold. Evaluated on the FULL product value (deposit +
+  // balance) to mirror the server — so a high-value preorder still qualifies.
+  const isDeposit = cartRemainingBalance > 0
+  const fullProductNet = subtotal + cartRemainingBalance - couponDiscount - pointsDiscount
+  const freeShipping = !!couponResult?.freeShipping || fullProductNet >= FREE_SHIPPING_THRESHOLD
+  const methodFee = freeShipping ? 0 : (SHIPPING_FEE[shipping] ?? 60)
+  // Deposit orders: shipping isn't charged with the deposit — it's collected with the
+  // balance. Non-deposit orders pay it now.
+  const shippingFee = isDeposit ? 0 : methodFee
+  const balanceShippingFee = isDeposit ? methodFee : 0
   // Credit-card surcharge (+5% on net payable). Mirrors the server — see CARD_SURCHARGE_RATE
   // in src/app/api/orders/route.ts. Points are earned on the pre-surcharge amount.
   const payableBeforeCard = Math.max(0, subtotal + shippingFee - couponDiscount - pointsDiscount)
@@ -388,7 +394,7 @@ export default function CheckoutPage() {
   const projectedCardTotal = payableBeforeCard + Math.round(payableBeforeCard * 0.05 * 100) / 100
   const cardAllowed = projectedCardTotal <= CARD_MAX_TOTAL
   // How much more (after discounts) the customer needs to spend to unlock free shipping
-  const freeShipRemaining = Math.max(0, FREE_SHIPPING_THRESHOLD - netAfterDiscounts)
+  const freeShipRemaining = Math.max(0, FREE_SHIPPING_THRESHOLD - fullProductNet)
 
   return (
     <div style={S.page}>
@@ -497,10 +503,9 @@ export default function CheckoutPage() {
           {/* Shipping Method */}
           <div style={S.card}>
             <div style={S.sectionTitle}>🚚 วิธีจัดส่ง</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
               {[
                 { id: 'Store Pickup',  label: '🏪 Store Pickup', fee: 'ฟรี' },
-                { id: 'EMS',           label: '📮 EMS',          fee: '฿50' },
                 { id: 'SPX',           label: '🚀 SPX',          fee: '฿40' },
               ].map(({ id, label, fee }) => (
                 <button key={id} type="button" onClick={() => setShipping(id)} style={{
@@ -753,14 +758,19 @@ export default function CheckoutPage() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.82rem', color: 'var(--ink-2)' }}>
               <span>ค่าจัดส่ง ({shipping})</span>
-              {freeShipping ? (
+              {isDeposit ? (
+                <span style={{ color: 'var(--ink-3)', fontSize: '.78rem' }}>
+                  {balanceShippingFee > 0 ? 'คิดตอนชำระส่วนที่เหลือ' : 'ฟรี'}
+                </span>
+              ) : freeShipping ? (
                 <span style={{ color: '#28a745', fontWeight: 600 }}>ฟรี!</span>
               ) : (
                 <span>฿{shippingFee.toLocaleString()}</span>
               )}
             </div>
-            {/* Free-shipping nudge — only when not yet qualifying and shipping isn't already free */}
-            {!freeShipping && shippingFee > 0 && freeShipRemaining > 0 && (
+            {/* Free-shipping nudge — only when not yet qualifying and shipping isn't already free.
+                For deposit orders shipping is deferred, so the nudge below the balance note covers it. */}
+            {!isDeposit && !freeShipping && shippingFee > 0 && freeShipRemaining > 0 && (
               <div style={{ fontSize: '.72rem', color: 'var(--sienna)', background: 'var(--sienna-bg)', borderRadius: 'var(--r)', padding: '6px 10px' }}>
                 🚚 ซื้อเพิ่มอีก ฿{freeShipRemaining.toLocaleString()} (หลังหักส่วนลด) รับส่งฟรี!
               </div>
@@ -792,11 +802,18 @@ export default function CheckoutPage() {
               </span>
             </div>
             {cartRemainingBalance > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.8rem', padding: '8px 12px', background: '#f3f0ff', borderRadius: 'var(--r)', border: '1px solid #d4c8ff' }}>
-                <span style={{ color: '#5b3fe0', fontWeight: 600 }}>💜 ยอดค้างชำระ (จ่ายเมื่อของมาถึง)</span>
-                <span style={{ color: '#5b3fe0', fontWeight: 700, fontFamily: "'Lora', serif" }}>
-                  ฿{cartRemainingBalance.toLocaleString()}
-                </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '.8rem', padding: '8px 12px', background: '#f3f0ff', borderRadius: 'var(--r)', border: '1px solid #d4c8ff' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#5b3fe0', fontWeight: 600 }}>💜 ยอดค้างชำระ (จ่ายเมื่อของมาถึง)</span>
+                  <span style={{ color: '#5b3fe0', fontWeight: 700, fontFamily: "'Lora', serif" }}>
+                    ฿{(cartRemainingBalance + balanceShippingFee).toLocaleString()}
+                  </span>
+                </div>
+                {balanceShippingFee > 0 && (
+                  <div style={{ fontSize: '.72rem', color: '#7a6e9e' }}>
+                    (ยอดสินค้า ฿{cartRemainingBalance.toLocaleString()} + ค่าจัดส่ง ฿{balanceShippingFee.toLocaleString()})
+                  </div>
+                )}
               </div>
             )}
             <div style={{ fontSize: '.72rem', color: 'var(--ink-3)', textAlign: 'right' }}>

@@ -193,11 +193,20 @@ export async function POST(req: NextRequest) {
   const pointsDiscount = Math.floor(Math.min(pointsToUse, availablePoints, subtotal))
 
   // Free shipping when a FREE_SHIPPING coupon applies OR the product total after
-  // coupon + points discounts reaches the threshold (computed AFTER discounts).
-  const netAfterDiscounts = subtotal - couponDiscount - pointsDiscount
-  const qualifiesFreeShipping = freeShipping || netAfterDiscounts >= FREE_SHIPPING_THRESHOLD
+  // coupon + points discounts reaches the threshold. The threshold is evaluated on the
+  // FULL product value (deposit + the remaining balance) — so a high-value preorder
+  // still qualifies even though only the deposit is charged up front. For non-deposit
+  // orders remainingBalance is 0, so this equals the post-discount subtotal as before.
+  const fullProductNet = subtotal + remainingBalance - couponDiscount - pointsDiscount
+  const qualifiesFreeShipping = freeShipping || fullProductNet >= FREE_SHIPPING_THRESHOLD
+  const methodFee = qualifiesFreeShipping ? 0 : (SHIPPING_FEES[shipping.shippingMethod] ?? DEFAULT_SHIPPING_FEE)
 
-  const shippingFee = qualifiesFreeShipping ? 0 : (SHIPPING_FEES[shipping.shippingMethod] ?? DEFAULT_SHIPPING_FEE)
+  // Deposit orders: don't charge shipping with the deposit — defer it to the balance
+  // payment (collected when the customer pays the remaining balance). Non-deposit orders
+  // pay shipping now as usual.
+  const isDeposit = remainingBalance > 0
+  const shippingFee = isDeposit ? 0 : methodFee
+  const balanceShippingFee = isDeposit ? methodFee : 0
 
   // Credit-card surcharge: +5% on the net payable (after discounts, incl. shipping),
   // applied only when the customer chose to pay by card. Computed server-side so the
@@ -334,6 +343,7 @@ export async function POST(req: NextRequest) {
           pointsEarned,
           discount:       couponDiscount,
           shippingFee,
+          balanceShippingFee,
           surcharge:      cardSurcharge,
           commissionAmount,
           couponId:       coupon?.id ?? null,
@@ -378,6 +388,7 @@ export async function POST(req: NextRequest) {
         price:       Number(it.price),
       })),
       shippingFee:      Number(order.shippingFee),
+      balanceShippingFee: Number(order.balanceShippingFee),
       discount:         Number(order.discount),
       pointsUsed:       order.pointsUsed,
       surcharge:        Number(order.surcharge),

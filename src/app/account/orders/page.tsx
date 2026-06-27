@@ -92,6 +92,9 @@ export default async function OrdersPage() {
             const surcharge = typeof order.surcharge === 'object' ? order.surcharge.toNumber() : Number(order.surcharge)
             const isCard   = order.paymentMethod === 'Credit Card'
             const remainingBalance = typeof order.remainingBalance === 'object' ? order.remainingBalance.toNumber() : Number(order.remainingBalance)
+            // ค่าจัดส่งที่เลื่อนมาเก็บตอนชำระยอดคงเหลือ (มัดจำไม่คิดค่าส่ง) — รวมในยอดที่ต้องชำระรอบสอง
+            const balanceShip = typeof order.balanceShippingFee === 'object' ? order.balanceShippingFee.toNumber() : Number(order.balanceShippingFee)
+            const balanceDueAmount = remainingBalance + balanceShip
             // ยอดคงเหลือยังต้องจ่าย: มัดจำผ่านแล้ว (CONFIRMED) + มียอดค้าง + ยังไม่ปิดยอด
             const balanceDue = order.status === 'CONFIRMED' && remainingBalance > 0 && !order.balancePaidAt
             const badgeSt  = statusStyle(order.status)
@@ -205,7 +208,10 @@ export default async function OrdersPage() {
                     {/* สถานะยอดคงเหลือ (พรีออเดอร์) */}
                     {balanceDue && !order.balanceSlipUrl && (
                       <span style={{ color: '#5b3fe0', fontWeight: 600 }}>
-                        💜 ยอดค้างชำระ {formatPrice(remainingBalance)}
+                        💜 ยอดค้างชำระ {formatPrice(balanceDueAmount)}
+                        {balanceShip > 0 && (
+                          <span style={{ fontWeight: 400, color: '#7a6e5e' }}> (รวมค่าส่ง {formatPrice(balanceShip)})</span>
+                        )}
                       </span>
                     )}
                     {/* สลิปส่วนที่เหลือ — ลูกค้ากดดูสลิปของตัวเองได้ (เช่นเดียวกับสลิปมัดจำ)

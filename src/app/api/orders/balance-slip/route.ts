@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     where: { orderNumber, userId: session.user.id },
     select: {
       id: true, status: true, recipientName: true, phone: true,
-      remainingBalance: true, balancePaidAt: true,
+      remainingBalance: true, balanceShippingFee: true, balancePaidAt: true,
     },
   })
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
@@ -75,7 +75,8 @@ export async function POST(req: Request) {
     orderNumber,
     recipientName: order.recipientName,
     phone: order.phone,
-    remainingBalance: order.remainingBalance,
+    // ยอดที่ลูกค้าจ่ายรอบนี้ = ยอดคงเหลือสินค้า + ค่าจัดส่งที่เลื่อนมาเก็บ
+    remainingBalance: Number(order.remainingBalance) + Number(order.balanceShippingFee),
   }).catch(() => {})
 
   return NextResponse.json({ balanceSlipUrl })
