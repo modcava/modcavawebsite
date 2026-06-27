@@ -193,6 +193,69 @@ export async function sendOrderReceivedEmail(opts: {
   })
 }
 
+// (a) แจ้งลูกค้าว่าสินค้าพรีออเดอร์มาถึง / ถึงรอบเก็บยอดคงเหลือแล้ว — แอดมินกด "แจ้งของมาถึง"
+export async function sendBalanceDueEmail(opts: {
+  to: string
+  name: string
+  orderNumber: string
+  remainingBalance: number
+  depositPaid: number       // ยอดมัดจำที่จ่ายไปแล้ว (Order.total)
+  paymentUrl: string        // .../orders/{n}/payment?type=balance
+}) {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
+  // คืน result ของ SMTP (มี messageId) เพื่อให้ผู้เรียก await + รู้ผลจริงได้
+  // (ใช้ระบบเดียวกับ api/admin/send-email)
+  return sendCustomEmail({
+    to:      opts.to,
+    subject: `[${appName}] 📦 สินค้าพรีออเดอร์มาถึงแล้ว · ชำระยอดคงเหลือ — #${opts.orderNumber}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
+        <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">📦 สินค้าพรีออเดอร์มาถึงแล้ว!</h2>
+        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${esc(opts.name) || 'คุณ'},<br/>สินค้าพรีออเดอร์ในออเดอร์ <strong style="color:#2a2218;">#${opts.orderNumber}</strong> มาถึงแล้ว 🎉 เหลือเพียงชำระ<strong>ยอดคงเหลือ</strong>เพื่อให้เราจัดส่งให้คุณ</p>
+        <div style="background:#f3f0ff;border:1px solid #d4c8ff;border-radius:8px;padding:16px 20px;margin-bottom:18px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="padding:4px 0;color:#6b5e4e;font-size:14px;">มัดจำที่ชำระแล้ว</td><td style="padding:4px 0;text-align:right;color:#6b5e4e;font-size:14px;white-space:nowrap;">฿${opts.depositPaid.toLocaleString()}</td></tr>
+            <tr><td style="padding:8px 0 0;color:#5b3fe0;font-weight:700;border-top:1px solid #d4c8ff;">ยอดคงเหลือที่ต้องชำระ</td><td style="padding:8px 0 0;text-align:right;color:#5b3fe0;font-weight:700;font-size:18px;white-space:nowrap;border-top:1px solid #d4c8ff;">฿${opts.remainingBalance.toLocaleString()}</td></tr>
+          </table>
+        </div>
+        <a href="${opts.paymentUrl}"
+          style="display:inline-block;padding:13px 32px;background:#8b5a2b;color:#fff;border-radius:8px;font-weight:700;text-decoration:none;font-size:15px;">
+          💰 ชำระยอดคงเหลือ &amp; แนบสลิป
+        </a>
+        <p style="color:#a08060;font-size:13px;margin-top:20px;">ชำระแล้วเราจะจัดส่งสินค้าให้ทันที · มีคำถามทักได้ที่ Line OA หรือ Facebook: Modcavashop</p>
+        <hr style="border:none;border-top:1px solid #e5ddd4;margin:24px 0;"/>
+        <p style="color:#c4b49a;font-size:11px;">© ${new Date().getFullYear()} ${appName} · 337/1 ถ.รื่นรมย์ อ.เมือง จ.ขอนแก่น 40000</p>
+      </div>
+    `,
+  })
+}
+
+// (c) ยืนยันรับยอดคงเหลือครบแล้ว — แอดมินกด "ยืนยันรับยอดคงเหลือ"
+export async function sendBalancePaidEmail(opts: {
+  to: string
+  name: string
+  orderNumber: string
+  amount: number            // ยอดคงเหลือที่เพิ่งรับครบ
+}) {
+  const appName = process.env.NEXT_PUBLIC_APP_NAME ?? 'Modcava'
+  await sendCustomEmail({
+    to:      opts.to,
+    subject: `[${appName}] ✅ ชำระครบแล้ว · กำลังจัดเตรียมจัดส่ง — #${opts.orderNumber}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#faf7f2;border-radius:12px;">
+        <h2 style="font-family:serif;color:#2a2218;margin-bottom:8px;">✅ ชำระยอดครบเรียบร้อยแล้ว!</h2>
+        <p style="color:#6b5e4e;margin-bottom:20px;">สวัสดี ${esc(opts.name) || 'คุณ'},<br/>เราได้รับ<strong>ยอดคงเหลือ ฿${opts.amount.toLocaleString()}</strong> ของออเดอร์ <strong style="color:#2a2218;">#${opts.orderNumber}</strong> ครบถ้วนแล้ว ออเดอร์นี้ชำระเต็มจำนวนเรียบร้อย 🎉</p>
+        <div style="background:#fff;border:1px solid #e5ddd4;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+          <p style="color:#2d7a42;margin:0;font-weight:600;">📦 กำลังแพ็คและจัดเตรียมจัดส่ง — เราจะแจ้งเลขพัสดุให้ทราบอีกครั้งเมื่อจัดส่งแล้ว</p>
+        </div>
+        <p style="color:#a08060;font-size:13px;margin-top:4px;">ขอบคุณที่อุดหนุนครับ · มีคำถามทักได้ที่ Line OA หรือ Facebook: Modcavashop</p>
+        <hr style="border:none;border-top:1px solid #e5ddd4;margin:24px 0;"/>
+        <p style="color:#c4b49a;font-size:11px;">© ${new Date().getFullYear()} ${appName} · 337/1 ถ.รื่นรมย์ อ.เมือง จ.ขอนแก่น 40000</p>
+      </div>
+    `,
+  })
+}
+
 export async function sendShippedEmail(opts: {
   to: string
   name: string

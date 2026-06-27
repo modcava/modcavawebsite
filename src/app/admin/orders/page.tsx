@@ -14,6 +14,8 @@ interface OrderDetail {
   shippingMethod?: string | null
   trackingNumber?: string | null
   slipUrl?: string | null
+  balanceSlipUrl?: string | null
+  balancePaidAt?: string | null
   note?: string | null
   total: number | string
   discount: number | string
@@ -44,6 +46,7 @@ function toN(v: number | string | null | undefined) {
 
 // ── Order Detail Modal ────────────────────────────────────────
 function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () => void }) {
+  const qc = useQueryClient()
   const [previewSlip, setPreviewSlip] = useState<string | null>(null)
   const { data, isLoading } = useQuery({
     queryKey: ['order-detail', orderId],
@@ -52,6 +55,29 @@ function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () =
       const j = await res.json()
       return j.data as OrderDetail
     },
+    // ออเดอร์เปลี่ยนได้ตลอด (ลูกค้าเพิ่งอัปสลิปยอดคงเหลือ) → ดึงสดทุกครั้งที่เปิด modal
+    staleTime: 0,
+    refetchOnMount: 'always',
+  })
+
+  // ยอดคงเหลือ (พรีออเดอร์): remind = แจ้งของมาถึง/ทวงยอด, confirm = ยืนยันรับยอดครบ
+  const balanceMut = useMutation({
+    mutationFn: async (action: 'confirm' | 'remind') => {
+      const res = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: orderId, balanceAction: action }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'ไม่สำเร็จ')
+      return j
+    },
+    onSuccess: (_d, action) => {
+      toast.success(action === 'confirm' ? 'ยืนยันรับยอดคงเหลือแล้ว' : 'ส่งอีเมลแจ้งลูกค้าแล้ว')
+      qc.invalidateQueries({ queryKey: ['order-detail', orderId] })
+      qc.invalidateQueries({ queryKey: ['admin-orders'] })
+    },
+    onError: (e: Error) => toast.error(e.message || 'ไม่สำเร็จ'),
   })
 
   const o = data
@@ -125,14 +151,24 @@ function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () =
               <div className="text-[10px] font-semibold text-[#8a9ab0] uppercase tracking-wider mb-2">การชำระเงิน</div>
               <div className="flex items-center justify-between">
                 <InfoRow label="วิธีชำระ" value={o.paymentMethod || '—'} />
-                {o.slipUrl && (
-                  <button
-                    onClick={() => setPreviewSlip(o.slipUrl!)}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors font-medium"
-                  >
-                    🧾 ดูสลิป
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {o.slipUrl && (
+                    <button
+                      onClick={() => setPreviewSlip(o.slipUrl!)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors font-medium"
+                    >
+                      🧾 ดูสลิปมัดจำ
+                    </button>
+                  )}
+                  {o.balanceSlipUrl && (
+                    <button
+                      onClick={() => setPreviewSlip(o.balanceSlipUrl!)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-violet-500/15 text-violet-300 border border-violet-500/30 hover:bg-violet-500/25 transition-colors font-medium"
+                    >
+                      💰 ดูสลิปยอดคงเหลือ
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -183,10 +219,41 @@ function OrderDetailModal({ orderId, onClose }: { orderId: string; onClose: () =
                   </span>
                   <span className="font-mono font-bold text-amber-400 text-base">{formatPrice(toN(o.total))}</span>
                 </div>
-                {toN(o.remainingBalance) > 0 && (
-                  <div className="flex justify-between items-center px-3 py-2 rounded-lg" style={{ background: '#2a1e5e', border: '1px solid #4a3a9a' }}>
-                    <span className="text-xs font-semibold" style={{ color: '#b09fff' }}>💜 ยอดค้างชำระ</span>
-                    <span className="font-mono font-semibold text-sm" style={{ color: '#b09fff' }}>{formatPrice(toN(o.remainingBalance))}</span>
+                {toN(o.remainingBalance) > 0 && !o.balancePaidAt && (
+                  <>
+                    <div className="flex justify-between items-center px-3 py-2 rounded-lg" style={{ background: '#2a1e5e', border: '1px solid #4a3a9a' }}>
+                      <span className="text-xs font-semibold" style={{ color: '#b09fff' }}>💜 ยอดค้างชำระ</span>
+                      <span className="font-mono font-semibold text-sm" style={{ color: '#b09fff' }}>{formatPrice(toN(o.remainingBalance))}</span>
+                    </div>
+                    {(o.status === 'CONFIRMED' || o.status === 'SHIPPED') ? (
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => balanceMut.mutate('remind')}
+                          disabled={balanceMut.isPending}
+                          className="flex-1 text-[11px] px-2 py-1.5 rounded-lg bg-[#161b27] text-[#c8d4e8] border border-[#2d3548] hover:border-[#4a3a9a] transition-colors font-medium disabled:opacity-50"
+                        >
+                          📢 แจ้งของมาถึง
+                        </button>
+                        {o.balanceSlipUrl && (
+                          <button
+                            onClick={() => balanceMut.mutate('confirm')}
+                            disabled={balanceMut.isPending}
+                            className="flex-1 text-[11px] px-2 py-1.5 rounded-lg font-semibold transition-colors disabled:opacity-50"
+                            style={{ background: '#3b2e6e', color: '#d6ccff', border: '1px solid #6d5bc4' }}
+                          >
+                            ✅ ยืนยันรับยอดคงเหลือ
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-[#8a9ab0] italic pt-0.5">เก็บยอดคงเหลือได้หลังยืนยันมัดจำ (CONFIRMED)</p>
+                    )}
+                  </>
+                )}
+                {o.balancePaidAt && (
+                  <div className="flex justify-between items-center px-3 py-2 rounded-lg" style={{ background: '#15321f', border: '1px solid #2f6b40' }}>
+                    <span className="text-xs font-semibold" style={{ color: '#5fd089' }}>✅ ชำระยอดครบแล้ว</span>
+                    <span className="text-[10px]" style={{ color: '#5fd089' }}>{new Date(o.balancePaidAt).toLocaleDateString('th-TH')}</span>
                   </div>
                 )}
               </div>
@@ -289,7 +356,7 @@ export default function AdminOrdersPage() {
   const [slipUrl, setSlipUrl]           = useState<string | null>(null)
   const [detailOrderId, setDetailOrderId] = useState<string | null>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['admin-orders', statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams()
@@ -298,6 +365,11 @@ export default function AdminOrdersPage() {
       const res = await fetch(`/api/admin/orders?${params}`)
       return res.json()
     },
+    // ออเดอร์เปลี่ยนได้ตลอด (ลูกค้าอัปสลิป/สลิปยอดคงเหลือเข้ามา) — override global staleTime 60s
+    // ให้รีเฟรชเองอัตโนมัติ: ทุก 15 วิ + ตอนกลับมาโฟกัสแท็บ จะได้เห็นปุ่ม "ดูสลิปส่วนที่เหลือ" ทันที
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 15_000,
   })
 
   const updateMutation = useMutation({
@@ -314,6 +386,25 @@ export default function AdminOrdersPage() {
     onError: () => toast.error('Update failed'),
   })
 
+  // ยอดคงเหลือ (พรีออเดอร์): remind = แจ้งลูกค้าให้ชำระส่วนที่เหลือ, confirm = ยืนยันรับยอดครบ
+  const balanceMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: 'remind' | 'confirm' }) => {
+      const res = await fetch('/api/admin/orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, balanceAction: action }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || 'ไม่สำเร็จ')
+      return j
+    },
+    onSuccess: (_d, vars) => {
+      toast.success(vars.action === 'confirm' ? 'ยืนยันรับยอดคงเหลือแล้ว' : 'ส่งแจ้งเตือนให้ลูกค้าแล้ว')
+      qc.invalidateQueries({ queryKey: ['admin-orders'] })
+    },
+    onError: (e: Error) => toast.error(e.message || 'ไม่สำเร็จ'),
+  })
+
   const orders = data?.data ?? []
 
   return (
@@ -321,8 +412,8 @@ export default function AdminOrdersPage() {
       <div className="eyebrow mb-1">Admin</div>
       <h1 className="font-display font-bold text-2xl text-warm-50 mb-6">Orders</h1>
 
-      {/* Status filter tabs */}
-      <div className="flex gap-2 flex-wrap mb-5">
+      {/* Status filter tabs + ปุ่มรีเฟรช */}
+      <div className="flex gap-2 flex-wrap items-center mb-5">
         {STATUSES.map((s) => (
           <button key={s} onClick={() => setStatusFilter(s)}
             className={cn('px-3 py-1.5 rounded text-xs font-semibold border transition-all',
@@ -330,6 +421,14 @@ export default function AdminOrdersPage() {
             {s || 'All'}
           </button>
         ))}
+        <button
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title="โหลดข้อมูลล่าสุด (เห็นสลิป/สถานะที่ลูกค้าเพิ่งส่ง)"
+          className="ml-auto px-3 py-1.5 rounded text-xs font-semibold border border-warm-600 text-warm-300 hover:border-warm-500 transition-all disabled:opacity-50"
+        >
+          {isFetching ? '⏳ กำลังรีเฟรช…' : '🔄 รีเฟรช'}
+        </button>
       </div>
 
       <div className="card overflow-hidden">
@@ -358,6 +457,9 @@ export default function AdminOrdersPage() {
                 status: string;
                 createdAt: string;
                 slipUrl?: string | null;
+                balanceSlipUrl?: string | null;
+                balancePaidAt?: string | null;
+                remainingBalance?: number | string | null;
               }) => (
                 <tr key={o.id} className="hover:bg-warm-700/20 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs">
@@ -382,16 +484,54 @@ export default function AdminOrdersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-1.5">
-                      {/* ปุ่มดูสลิป */}
-                      {o.slipUrl ? (
-                        <button
-                          onClick={() => setSlipUrl(o.slipUrl!)}
-                          className="btn-amber text-xs py-1 px-2 flex items-center gap-1"
-                        >
-                          🧾 ดูสลิป
-                        </button>
-                      ) : (
-                        <span className="text-[10px] text-warm-600 italic">ยังไม่มีสลิป</span>
+                      {/* ปุ่มดูสลิป — มัดจำ / ส่วนที่เหลือ แยกกัน */}
+                      <div className="flex flex-wrap gap-1">
+                        {o.slipUrl ? (
+                          <button
+                            onClick={() => setSlipUrl(o.slipUrl!)}
+                            className="btn-amber text-[10px] py-1 px-1.5 flex items-center gap-1"
+                          >
+                            🧾 สลิปมัดจำ
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-warm-600 italic">ยังไม่มีสลิป</span>
+                        )}
+                        {o.balanceSlipUrl && (
+                          <button
+                            onClick={() => setSlipUrl(o.balanceSlipUrl!)}
+                            className="text-[10px] py-1 px-1.5 rounded-md flex items-center gap-1"
+                            style={{ background: 'rgba(139,92,246,.15)', color: '#c4b5fd', border: '1px solid rgba(139,92,246,.4)' }}
+                          >
+                            💰 สลิปส่วนที่เหลือ
+                          </button>
+                        )}
+                      </div>
+
+                      {/* ยอดคงเหลือ: แจ้งเตือนให้ชำระ / ยืนยันรับยอด — เฉพาะมัดจำผ่านแล้ว (CONFIRMED/SHIPPED) และยังค้างยอด */}
+                      {toN(o.remainingBalance) > 0 && !o.balancePaidAt && (o.status === 'CONFIRMED' || o.status === 'SHIPPED') && (
+                        <div className="flex flex-wrap gap-1">
+                          <button
+                            onClick={() => { if (window.confirm('ส่งอีเมลแจ้งลูกค้าให้ชำระยอดคงเหลือ?')) balanceMutation.mutate({ id: o.id, action: 'remind' }) }}
+                            disabled={balanceMutation.isPending}
+                            className="text-[10px] py-1 px-1.5 rounded-md flex items-center gap-1 disabled:opacity-50"
+                            style={{ background: 'rgba(217,119,6,.15)', color: '#fbbf24', border: '1px solid rgba(217,119,6,.4)' }}
+                          >
+                            📢 แจ้งชำระส่วนที่เหลือ
+                          </button>
+                          {o.balanceSlipUrl && (
+                            <button
+                              onClick={() => { if (window.confirm('ยืนยันว่าได้รับยอดคงเหลือครบแล้ว?')) balanceMutation.mutate({ id: o.id, action: 'confirm' }) }}
+                              disabled={balanceMutation.isPending}
+                              className="text-[10px] py-1 px-1.5 rounded-md flex items-center gap-1 disabled:opacity-50"
+                              style={{ background: 'rgba(139,92,246,.2)', color: '#d6ccff', border: '1px solid #6d5bc4' }}
+                            >
+                              ✅ ยืนยันรับยอด
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {o.balancePaidAt && (
+                        <span className="text-[10px] font-semibold" style={{ color: '#5fd089' }}>✅ ชำระยอดครบแล้ว</span>
                       )}
 
                       {/* Edit / Save */}

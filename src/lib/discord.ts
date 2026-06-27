@@ -128,3 +128,55 @@ export async function sendSlipNotification(slip: SlipPayload) {
     console.error('[discord] sendSlipNotification failed:', err)
   }
 }
+
+type BalanceSlipPayload = {
+  orderNumber: string
+  recipientName: string | null
+  phone: string | null
+  remainingBalance: number | { toNumber(): number }
+}
+
+// แจ้งเตือน admin เมื่อลูกค้าส่งสลิป "ยอดคงเหลือ" (พรีออเดอร์รอบสอง) — ช่อง webhook เดียวกัน
+export async function sendBalanceSlipNotification(slip: BalanceSlipPayload) {
+  if (!WEBHOOK_URL) return
+
+  const toNum = (v: number | { toNumber(): number }) =>
+    typeof v === 'object' ? v.toNumber() : Number(v)
+
+  const remaining = toNum(slip.remainingBalance)
+
+  const fields = [
+    { name: 'ลูกค้า', value: `${slip.recipientName ?? '-'}  |  ${slip.phone ?? '-'}`, inline: false },
+    { name: 'ยอดคงเหลือที่ต้องตรวจ', value: `฿${remaining.toLocaleString()}`, inline: true },
+  ]
+
+  if (APP_URL) {
+    fields.push({ name: 'ตรวจสลิป', value: `[เปิดหน้าจัดการออเดอร์](${APP_URL}/admin/orders)`, inline: false })
+  }
+
+  const payload = {
+    embeds: [
+      {
+        title: `💰  ลูกค้าส่งสลิปยอดคงเหลือ  #${slip.orderNumber}`,
+        description: 'รอแอดมินตรวจสอบและยืนยันยอดคงเหลือ (พรีออเดอร์)',
+        color: 0x8b5cf6, // violet — ยอดคงเหลือ
+        fields,
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  }
+
+  try {
+    const res = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      console.error(`[discord] balance slip webhook rejected ${res.status}:`, text)
+    }
+  } catch (err) {
+    console.error('[discord] sendBalanceSlipNotification failed:', err)
+  }
+}

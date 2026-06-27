@@ -352,6 +352,11 @@ model Order {
   couponId      String?  @map("coupon_id")
   coupon        Coupon?  @relation(fields: [couponId], references: [id])
   slipUrl       String?  @map("slip_url") @db.Text
+  // Preorder remaining-balance second payment: a SEPARATE slip (so it never
+  // overwrites the deposit slip) + the timestamp the admin confirmed it.
+  // balancePaidAt != null is the source of truth that the balance is settled.
+  balanceSlipUrl String?   @map("balance_slip_url") @db.Text
+  balancePaidAt  DateTime? @map("balance_paid_at")
   invoice       Invoice?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

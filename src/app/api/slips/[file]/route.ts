@@ -26,8 +26,10 @@ export async function GET(_req: NextRequest, { params }: { params: { file: strin
   const role = (session.user as { role?: string }).role
   if (role !== 'ADMIN') {
     // ลูกค้าทั่วไป: ต้องเป็นเจ้าของออเดอร์ที่อ้างสลิปนี้
+    // (ตรงกับสลิปมัดจำ slipUrl หรือสลิปยอดคงเหลือ balanceSlipUrl ก็ได้)
+    const ref = `/api/slips/${file}`
     const owned = await prisma.order.findFirst({
-      where: { slipUrl: `/api/slips/${file}`, userId: session.user.id },
+      where: { userId: session.user.id, OR: [{ slipUrl: ref }, { balanceSlipUrl: ref }] },
       select: { id: true },
     })
     if (!owned) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

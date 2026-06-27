@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { logAudit } from '@/lib/audit'
-import { sendShippedEmail, sendOrderConfirmedEmail } from '@/lib/email'
+import { sendShippedEmail, sendOrderConfirmedEmail, sendBalanceDueEmail, sendBalancePaidEmail } from '@/lib/email'
 import { earnPoints } from '@/lib/points'
 import { maybeSweepExpiredUnpaidOrders, restoreOrderResources } from '@/lib/order-maintenance'
 import type { OrderStatus } from '@prisma/client'
@@ -66,6 +66,8 @@ export async function PATCH(req: NextRequest) {
     id:             z.string(),
     status:         z.enum(['PENDING','CONFIRMED','SHIPPED','DELIVERED','CANCELLED']).optional(),
     trackingNumber: z.string().optional(),
+    // พรีออเดอร์ยอดคงเหลือ: remind = แจ้งของมาถึง/ทวงยอด, confirm = ยืนยันรับยอดครบ
+    balanceAction:  z.enum(['confirm','remind']).optional(),
   })
 
   const parsed = schema.safeParse(body)
@@ -73,7 +75,80 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
-  const { id, ...data } = parsed.data
+  const { id, balanceAction, ...data } = parsed.data
+
+  // ── Balance actions (preorder remaining balance) — จัดการแยกจากการเปลี่ยนสถานะ ──
+  if (balanceAction) {
+    const ord = await prisma.order.findUnique({
+      where: { id },
+      select: {
+        id: true, orderNumber: true, total: true, remainingBalance: true, balancePaidAt: true,
+        user: { select: { name: true, email: true } },
+      },
+    })
+    if (!ord) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+
+    const remaining = Number(ord.remainingBalance)
+    if (remaining <= 0 || ord.balancePaidAt) {
+      return NextResponse.json({ error: 'ออเดอร์นี้ไม่มียอดคงเหลือค้างชำระ' }, { status: 400 })
+    }
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://modcava.com'
+
+    if (balanceAction === 'remind') {
+      if (!ord.user?.email) {
+        return NextResponse.json({ error: 'ลูกค้าไม่มีอีเมล — ส่งแจ้งเตือนไม่ได้' }, { status: 400 })
+      }
+      // ส่งจริงแบบ await + รู้ผล (ระบบเดียวกับ api/admin/send-email) — ไม่ fire-and-forget
+      // เพื่อให้แอดมินเห็นผลสำเร็จ/ล้มเหลวจริง (เดิมเด้ง success เสมอแม้เมลไม่ออก)
+      try {
+        const result = await sendBalanceDueEmail({
+          to:               ord.user.email,
+          name:             ord.user.name ?? '',
+          orderNumber:      ord.orderNumber,
+          remainingBalance: remaining,
+          depositPaid:      Number(ord.total),
+          paymentUrl:       `${appUrl}/orders/${ord.orderNumber}/payment?type=balance`,
+        })
+        if (ctx) {
+          await logAudit(ctx, {
+            action: 'order.balance_remind', resource: 'order', resourceId: id,
+            details: { orderNumber: ord.orderNumber, remaining, to: ord.user.email }, req,
+          })
+        }
+        return NextResponse.json({ data: { ok: true, messageId: result?.messageId ?? null } })
+      } catch (e) {
+        console.error('[sendBalanceDueEmail]', e)
+        return NextResponse.json(
+          { error: e instanceof Error ? e.message : 'ส่งอีเมลแจ้งเตือนไม่สำเร็จ' },
+          { status: 500 },
+        )
+      }
+    }
+
+    // confirm — ปิดยอดคงเหลือแบบ atomic (กันกดซ้ำ/แอดมินสองคน)
+    const upd = await prisma.order.updateMany({
+      where: { id, balancePaidAt: null },
+      data:  { balancePaidAt: new Date(), remainingBalance: 0 },
+    })
+    if (upd.count === 0) {
+      return NextResponse.json({ error: 'ยืนยันไม่สำเร็จ (ยอดถูกปิดไปแล้ว)' }, { status: 400 })
+    }
+    if (ord.user?.email) {
+      sendBalancePaidEmail({
+        to:          ord.user.email,
+        name:        ord.user.name ?? '',
+        orderNumber: ord.orderNumber,
+        amount:      remaining,
+      }).catch((e) => console.error('[sendBalancePaidEmail]', e))
+    }
+    if (ctx) {
+      await logAudit(ctx, {
+        action: 'order.balance_confirm', resource: 'order', resourceId: id,
+        details: { orderNumber: ord.orderNumber, amount: remaining }, req,
+      })
+    }
+    return NextResponse.json({ data: { ok: true } })
+  }
 
   // ดึง order เดิมก่อน เพื่อใช้เทียบสถานะตอนส่งอีเมล / audit หลัง tx
   const existing = await prisma.order.findUnique({

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { CARD_MAX_TOTAL } from '@/lib/payment'
@@ -13,6 +13,9 @@ interface OrderInfo {
   total: number
   surcharge: number
   status: string
+  remainingBalance: number
+  balanceSlipUrl: string | null
+  balancePaidAt: string | null
 }
 
 // ── ข้อมูลรับโอน — แก้ตรงนี้ ──────────────────────────────
@@ -25,7 +28,9 @@ const ACCOUNT_NO    = '9352236288' // เลขบัญชีสำหรับ
 export default function PaymentPage() {
   const params     = useParams()
   const router     = useRouter()
+  const searchParams = useSearchParams()
   const orderNumber = params.orderNumber as string
+  const isBalanceParam = searchParams.get('type') === 'balance'
 
   const [file, setFile]       = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -85,12 +90,15 @@ export default function PaymentPage() {
 
   async function uploadSlip() {
     if (!file) return
+    const balanceMode =
+      isBalanceParam && !!order && order.remainingBalance > 0 && !order.balancePaidAt &&
+      (order.status === 'CONFIRMED' || order.status === 'SHIPPED')
     setUploading(true)
     try {
       const fd = new FormData()
       fd.append('slip', file)
       fd.append('orderNumber', orderNumber)
-      const res = await fetch('/api/orders/slip', { method: 'POST', body: fd })
+      const res = await fetch(balanceMode ? '/api/orders/balance-slip' : '/api/orders/slip', { method: 'POST', body: fd })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         toast.error(d.error || 'อัปโหลดไม่สำเร็จ')
@@ -140,8 +148,35 @@ export default function PaymentPage() {
     )
   }
 
+  // โหมดชำระ "ยอดคงเหลือ" (พรีออเดอร์รอบสอง) — เข้าได้เมื่อ ?type=balance และออเดอร์ผ่านมัดจำ
+  // แล้ว (CONFIRMED/SHIPPED) + ยังมียอดค้าง + ยังไม่ปิดยอด. ยอดคงเหลือชำระผ่านโอน/QR เสมอ.
+  const isBalanceMode =
+    isBalanceParam && !!order && order.remainingBalance > 0 && !order.balancePaidAt &&
+    (order.status === 'CONFIRMED' || order.status === 'SHIPPED')
+
+  // เปิดลิงก์ ?type=balance แต่ออเดอร์ไม่มียอดคงเหลือ/ปิดยอดแล้ว → แจ้งสั้นๆ
+  if (isBalanceParam && order && !isBalanceMode) {
+    return (
+      <div style={{ minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', maxWidth: 400, padding: '0 20px' }}>
+          <div style={{ fontSize: '3rem', marginBottom: 14 }}>{order.balancePaidAt ? '✅' : 'ℹ️'}</div>
+          <h2 style={{ fontFamily: "'Lora', serif", fontSize: '1.4rem', fontWeight: 600, color: 'var(--ink)', marginBottom: 10 }}>
+            {order.balancePaidAt ? 'ชำระยอดคงเหลือครบแล้ว' : 'ไม่มียอดคงเหลือค้างชำระ'}
+          </h2>
+          <p style={{ fontSize: '.85rem', color: 'var(--ink-2)', lineHeight: 1.7, marginBottom: 24 }}>
+            คำสั่งซื้อ <strong style={{ color: 'var(--sienna)', fontFamily: 'monospace' }}>{orderNumber}</strong>
+          </p>
+          <Link href="/account/orders" style={{ display: 'inline-block', padding: '11px 28px', background: 'var(--sienna)', color: '#fff', borderRadius: 'var(--r)', fontWeight: 700, fontSize: '.88rem', textDecoration: 'none' }}>
+            ดูคำสั่งซื้อของฉัน →
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   // ── Credit-card flow: DM the page for a payment link (no bank transfer) ──
-  if (order?.paymentMethod === 'Credit Card') {
+  // ข้ามเมื่ออยู่ในโหมดยอดคงเหลือ — ยอดคงเหลือชำระผ่านโอน/QR เสมอ
+  if (!isBalanceMode && order?.paymentMethod === 'Credit Card') {
     return (
       <div style={{ maxWidth: 560, margin: '0 auto', padding: '40px 20px 80px' }}>
         <div className="eyebrow" style={{ marginBottom: 6 }}>ชำระเงิน</div>
@@ -228,14 +263,27 @@ export default function PaymentPage() {
       {/* Header */}
       <div className="eyebrow" style={{ marginBottom: 6 }}>ชำระเงิน</div>
       <h1 style={{ fontFamily: "'Lora', serif", fontSize: '1.8rem', fontWeight: 600, color: 'var(--ink)', marginBottom: 6 }}>
-        โอนชำระเงิน
+        {isBalanceMode ? 'ชำระยอดคงเหลือ' : 'โอนชำระเงิน'}
       </h1>
-      <p style={{ fontSize: '.84rem', color: 'var(--ink-3)', marginBottom: 28 }}>
+      <p style={{ fontSize: '.84rem', color: 'var(--ink-3)', marginBottom: isBalanceMode ? 18 : 28 }}>
         คำสั่งซื้อ{' '}
         <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--sienna)' }}>
           {orderNumber}
         </span>
       </p>
+
+      {/* Balance-mode amount card */}
+      {isBalanceMode && order && (
+        <div style={{ background: '#f3f0ff', border: '1px solid #d4c8ff', borderRadius: 'var(--r-lg)', padding: '18px 22px', marginBottom: 20, textAlign: 'center' }}>
+          <div style={{ fontSize: '.78rem', color: '#6b5e4e', marginBottom: 6 }}>ยอดคงเหลือที่ต้องชำระ</div>
+          <div style={{ fontFamily: "'Lora', serif", fontSize: '2rem', fontWeight: 700, color: '#5b3fe0' }}>
+            ฿{order.remainingBalance.toLocaleString()}
+          </div>
+          <div style={{ fontSize: '.74rem', color: 'var(--ink-3)', marginTop: 4 }}>
+            (มัดจำที่ชำระแล้ว ฿{order.total.toLocaleString()})
+          </div>
+        </div>
+      )}
 
       {/* QR + bank account images */}
       <div style={{
@@ -290,7 +338,8 @@ export default function PaymentPage() {
         </p>
       </div>
 
-      {/* Switch to credit card */}
+      {/* Switch to credit card — ซ่อนในโหมดยอดคงเหลือ (ชำระผ่านโอน/QR เท่านั้น) */}
+      {!isBalanceMode && (
       <div style={{ textAlign: 'center', marginBottom: 20 }}>
         <button
           onClick={() => changeMethod('Credit Card')}
@@ -311,6 +360,7 @@ export default function PaymentPage() {
           </p>
         )}
       </div>
+      )}
 
       {/* Upload slip */}
       <div style={{
@@ -318,12 +368,18 @@ export default function PaymentPage() {
         borderRadius: 'var(--r-lg)', padding: '20px 22px',
       }}>
         <div style={{ fontSize: '.88rem', fontWeight: 700, color: 'var(--ink)', marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--divider)' }}>
-          🧾 แนบสลิปการโอนเงิน
+          🧾 {isBalanceMode ? 'แนบสลิปยอดคงเหลือ' : 'แนบสลิปการโอนเงิน'}
         </div>
 
-        <div style={{ fontSize: '.76rem', color: '#92610a', background: '#fff3cd', border: '1px solid #ffe08a', borderRadius: 'var(--r)', padding: '8px 12px', marginBottom: 14, lineHeight: 1.5 }}>
-          ⏰ กรุณาแนบสลิป<strong> ภายใน 48 ชั่วโมง</strong> หลังสั่งซื้อ มิฉะนั้นออเดอร์จะถูกยกเลิกอัตโนมัติ (แต้ม/คูปองที่ใช้จะถูกคืนให้)
-        </div>
+        {isBalanceMode ? (
+          <div style={{ fontSize: '.76rem', color: '#5b3fe0', background: '#f3f0ff', border: '1px solid #d4c8ff', borderRadius: 'var(--r)', padding: '8px 12px', marginBottom: 14, lineHeight: 1.5 }}>
+            💜 ยอดคงเหลือ<strong>ไม่มีกำหนดยกเลิก</strong> แต่กรุณาชำระเพื่อให้เราจัดส่งสินค้าให้คุณได้
+          </div>
+        ) : (
+          <div style={{ fontSize: '.76rem', color: '#92610a', background: '#fff3cd', border: '1px solid #ffe08a', borderRadius: 'var(--r)', padding: '8px 12px', marginBottom: 14, lineHeight: 1.5 }}>
+            ⏰ กรุณาแนบสลิป<strong> ภายใน 48 ชั่วโมง</strong> หลังสั่งซื้อ มิฉะนั้นออเดอร์จะถูกยกเลิกอัตโนมัติ (แต้ม/คูปองที่ใช้จะถูกคืนให้)
+          </div>
+        )}
 
         {/* Drop zone */}
         <div

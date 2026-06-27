@@ -19,6 +19,7 @@ export async function GET(
       orderNumber: true, userId: true, status: true,
       total: true, discount: true, shippingFee: true, surcharge: true,
       paymentMethod: true, slipUrl: true, createdAt: true,
+      remainingBalance: true, balanceSlipUrl: true, balancePaidAt: true,
     },
   })
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
@@ -38,6 +39,9 @@ export async function GET(
       surcharge:     Number(order.surcharge),
       paymentMethod: order.paymentMethod,
       slipUrl:       order.slipUrl,
+      remainingBalance: Number(order.remainingBalance),
+      balanceSlipUrl:   order.balanceSlipUrl,
+      balancePaidAt:    order.balancePaidAt,
     },
   })
 }

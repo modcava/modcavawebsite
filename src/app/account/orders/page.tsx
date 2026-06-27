@@ -91,6 +91,9 @@ export default async function OrdersPage() {
             const total    = typeof order.total === 'object' ? order.total.toNumber() : Number(order.total)
             const surcharge = typeof order.surcharge === 'object' ? order.surcharge.toNumber() : Number(order.surcharge)
             const isCard   = order.paymentMethod === 'Credit Card'
+            const remainingBalance = typeof order.remainingBalance === 'object' ? order.remainingBalance.toNumber() : Number(order.remainingBalance)
+            // ยอดคงเหลือยังต้องจ่าย: มัดจำผ่านแล้ว (CONFIRMED) + มียอดค้าง + ยังไม่ปิดยอด
+            const balanceDue = order.status === 'CONFIRMED' && remainingBalance > 0 && !order.balancePaidAt
             const badgeSt  = statusStyle(order.status)
             const label    = statusLabel(order.status)
             const dateStr  = new Date(order.createdAt).toLocaleDateString('th-TH', {
@@ -185,10 +188,37 @@ export default async function OrdersPage() {
                         📍 {order.recipientName} · {order.subdistrict ? `${order.subdistrict}, ` : ''}{order.district}, {order.province}
                       </span>
                     )}
-                    {/* สลิปที่ส่งแล้ว */}
+                    {/* สลิปมัดจำที่ส่งแล้ว — หลังแอดมินยืนยัน (CONFIRMED+) ลูกค้ากดดูสลิปของ
+                        ตัวเองได้ (route /api/slips เช็คสิทธิ์เจ้าของออเดอร์ → เห็นเฉพาะของตัวเอง) */}
                     {order.slipUrl && (
+                      (order.status === 'CONFIRMED' || order.status === 'SHIPPED' || order.status === 'DELIVERED') ? (
+                        <a href={order.slipUrl} target="_blank" rel="noopener noreferrer"
+                          style={{ color: '#28a745', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          🧾 ดูสลิปมัดจำ ↗
+                        </a>
+                      ) : (
+                        <span style={{ color: '#28a745', fontWeight: 600 }}>
+                          ✅ ส่งสลิปแล้ว
+                        </span>
+                      )
+                    )}
+                    {/* สถานะยอดคงเหลือ (พรีออเดอร์) */}
+                    {balanceDue && !order.balanceSlipUrl && (
+                      <span style={{ color: '#5b3fe0', fontWeight: 600 }}>
+                        💜 ยอดค้างชำระ {formatPrice(remainingBalance)}
+                      </span>
+                    )}
+                    {/* สลิปส่วนที่เหลือ — ลูกค้ากดดูสลิปของตัวเองได้ (เช่นเดียวกับสลิปมัดจำ)
+                        ทั้งช่วงรอตรวจสอบ และหลังแอดมินยืนยันชำระครบแล้ว */}
+                    {order.balanceSlipUrl && (
+                      <a href={order.balanceSlipUrl} target="_blank" rel="noopener noreferrer"
+                        style={{ color: order.balancePaidAt ? '#28a745' : '#d97706', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        💰 ดูสลิปส่วนที่เหลือ{order.balancePaidAt ? '' : ' (รอตรวจสอบ)'} ↗
+                      </a>
+                    )}
+                    {order.balancePaidAt && (
                       <span style={{ color: '#28a745', fontWeight: 600 }}>
-                        ✅ ส่งสลิปแล้ว
+                        ✅ ชำระยอดครบแล้ว
                       </span>
                     )}
                   </div>
@@ -207,6 +237,22 @@ export default async function OrdersPage() {
                         whiteSpace: 'nowrap', transition: 'opacity .18s',
                       }}>
                         {isCard ? '💳 ทักเพจชำระบัตร' : order.slipUrl ? '🔄 ส่งสลิปใหม่' : '💳 ชำระสินค้า'}
+                      </Link>
+                    )}
+
+                    {/* ปุ่มชำระยอดคงเหลือ (พรีออเดอร์) — แสดงเมื่อมัดจำผ่านแล้วและยังค้างยอด */}
+                    {balanceDue && (
+                      <Link href={`/orders/${order.orderNumber}/payment?type=balance`} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '7px 16px',
+                        background: order.balanceSlipUrl ? 'transparent' : '#5b3fe0',
+                        color: order.balanceSlipUrl ? '#5b3fe0' : '#fff',
+                        border: order.balanceSlipUrl ? '1.5px solid #5b3fe0' : 'none',
+                        borderRadius: 'var(--r)', fontWeight: 700,
+                        fontSize: '.78rem', textDecoration: 'none',
+                        whiteSpace: 'nowrap', transition: 'opacity .18s',
+                      }}>
+                        {order.balanceSlipUrl ? '🔄 ส่งสลิปยอดคงเหลือใหม่' : '💰 ชำระยอดคงเหลือ'}
                       </Link>
                     )}
 
